@@ -13,6 +13,7 @@ const (
 	DeleteEventAction                = "Delete"
 	DefaultAPITimeout                = 5 * time.Minute
 	VirtualMachineTaskRef            = "current-task-ref"
+	KubeadmCertificateKey            = "k8s-certificate-key"
 	KubeadmToken                     = "k8s-token"
 	KubeadmTokenExpiryTime           = "k8s-token-expiry-time"
 	KubeadmTokenTtl                  = 10 * time.Minute

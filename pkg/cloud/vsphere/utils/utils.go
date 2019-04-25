@@ -2,6 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,23 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/util"
 	"sigs.k8s.io/yaml"
 )
+
+func CreateCertificateKey() (string, error) {
+	var CertificateKeySize uint32 = 32
+	randBytes, err := createRandBytes(CertificateKeySize)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(randBytes), nil
+}
+
+func createRandBytes(size uint32) ([]byte, error) {
+	bytes := make([]byte, size)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
 
 // GetMasterForCluster returns the master nodes for the given cluster
 func GetMasterForCluster(cluster *clusterv1.Cluster, lister v1alpha1.Interface) ([]*clusterv1.Machine, error) {
@@ -159,6 +178,48 @@ func CreateTempFile(contents string) (string, error) {
 		return "", err
 	}
 	return tmpFile.Name(), nil
+}
+
+func ReadClusterCertificateKey(cluster *clusterv1.Cluster) (string, error) {
+	if cluster.ObjectMeta.Annotations == nil {
+		return "", errors.New("certificate key annotation not found on cluster")
+	}
+	certificateKey, ok := cluster.ObjectMeta.Annotations[constants.KubeadmCertificateKey]
+	if !ok {
+		return "", errors.New("certificate key annotation not found on cluster")
+	}
+	return certificateKey, nil
+}
+
+func UploadKubeadmCertificates(cluster *clusterv1.Cluster, master *clusterv1.Machine) error {
+	ip, err := GetIP(cluster, master)
+	if err != nil {
+		klog.Infof("cannot upload kubeadm certificates, %v", err)
+		return err
+	}
+	certificateKey, err := ReadClusterCertificateKey(cluster)
+	if err != nil {
+		klog.Infof("cannot upload kubeadm certificates, %v", err)
+		return err
+	}
+
+	klog.Infof("kubeadm upload-certificates (using ssh) from %s", ip)
+	kubeadmCmd := fmt.Sprintf("sudo kubeadm init phase upload-certs --experimental-upload-certs --certificate-key=%s", certificateKey)
+	var out bytes.Buffer
+	cmd := exec.Command(
+		"ssh", "-i", "~/.ssh/vsphere_tmp",
+		"-q",
+		"-o", "StrictHostKeyChecking no",
+		"-o", "UserKnownHostsFile /dev/null",
+		fmt.Sprintf("ubuntu@%s", ip),
+		kubeadmCmd)
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		klog.Infof("ssh failed with error, %v", err)
+	}
+	return err
 }
 
 func GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {

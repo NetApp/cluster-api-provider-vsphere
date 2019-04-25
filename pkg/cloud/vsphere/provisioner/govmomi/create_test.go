@@ -145,8 +145,7 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			Versions: v1alpha1.MachineVersionInfo{
-				ControlPlane: "1.12.3",
-				Kubelet:      "1.12.3",
+				Kubelet: "1.12.3",
 			},
 		},
 	}

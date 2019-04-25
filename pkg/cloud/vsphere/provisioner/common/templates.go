@@ -33,6 +33,7 @@ import (
 
 type TemplateParams struct {
 	Token             string
+	CertificateKey    string
 	MajorMinorVersion string
 	Cluster           *clusterv1.Cluster
 	Machine           *clusterv1.Machine
@@ -62,6 +63,15 @@ func GetMasterStartupScript(params TemplateParams) (string, error) {
 	}
 
 	if err := masterStartupScriptTemplate.ExecuteTemplate(&buf, tName, params); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func GetMasterJoinScript(params TemplateParams) (string, error) {
+	var buf bytes.Buffer
+	tName := "fullScript"
+	if err := masterJoinScriptTemplate.ExecuteTemplate(&buf, tName, params); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -100,6 +110,7 @@ func preloadScript(t *template.Template, k8sVersion string, dockerImages []strin
 var (
 	nodeStartupScriptTemplate        *template.Template
 	masterStartupScriptTemplate      *template.Template
+	masterJoinScriptTemplate         *template.Template
 	cloudInitUserDataTemplate        *template.Template
 	cloudProviderConfigTemplate      *template.Template
 	cloudInitMetaDataNetworkTemplate *template.Template
@@ -152,10 +163,18 @@ func init() {
 		"base64Decode": base64Decode,
 		"indent":       indent,
 	}
-	nodeStartupScriptTemplate = template.Must(template.New("nodeStartupScript").Funcs(funcMap).Parse(nodeStartupScript))
+	nodeStartupScriptTemplate = template.Must(template.New("nodeStartupScript").Funcs(funcMap).Parse(provisionScript))
+	nodeStartupScriptTemplate = template.Must(nodeStartupScriptTemplate.Parse(nodeStartupScript))
 	nodeStartupScriptTemplate = template.Must(nodeStartupScriptTemplate.Parse(genericTemplates))
-	masterStartupScriptTemplate = template.Must(template.New("masterStartupScript").Funcs(funcMap).Parse(masterStartupScript))
+
+	masterStartupScriptTemplate = template.Must(template.New("masterStartupScript").Funcs(funcMap).Parse(provisionScript))
+	masterStartupScriptTemplate = template.Must(masterStartupScriptTemplate.Parse(masterStartupScript))
 	masterStartupScriptTemplate = template.Must(masterStartupScriptTemplate.Parse(genericTemplates))
+
+	masterJoinScriptTemplate = template.Must(template.New("masterJoinScript").Funcs(funcMap).Parse(provisionScript))
+	masterJoinScriptTemplate = template.Must(masterJoinScriptTemplate.Parse(masterJoinScript))
+	masterJoinScriptTemplate = template.Must(masterJoinScriptTemplate.Parse(genericTemplates))
+
 	cloudInitUserDataTemplate = template.Must(template.New("cloudInitUserData").Funcs(funcMap).Parse(cloudInitUserData))
 	cloudProviderConfigTemplate = template.Must(template.New("cloudProviderConfig").Parse(cloudProviderConfig))
 	cloudInitMetaDataNetworkTemplate = template.Must(template.New("cloudInitMetaDataNetwork").Parse(networkSpec))
@@ -367,100 +386,7 @@ echo done.
 {{- end }}
 `
 
-const nodeStartupScript = `
-{{ define "install" -}}
-
-apt-get update
-apt-get install -y apt-transport-https prips
-apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F76221572C52609D
-
-cat <<EOF > /etc/apt/sources.list.d/k8s.list
-deb [arch=amd64] https://apt.dockerproject.org/repo ubuntu-xenial main
-EOF
-
-apt-get update
-
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-
-cat <<EOF > /etc/apt/sources.list.d/kubernetes.list
-deb http://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-apt-get update
-
-KUBELET_VERSION={{ .Machine.Spec.Versions.Kubelet }}
-# Our Debian packages have versions like "1.8.0-00" or "1.8.0-01". Do a prefix
-# search based on our SemVer to find the right (newest) package version.
-function getversion() {
-	name=$1
-	prefix=$2
-	version=$(apt-cache madison $name | awk '{ print $3 }' | grep ^$prefix | head -n1)
-	if [[ -z "$version" ]]; then
-		echo Can\'t find package $name with prefix $prefix
-		exit 1
-	fi
-	echo $version
-}
-
-DOCKER_VER=$(getversion docker.io 18.06)
-KUBELET=$(getversion kubelet ${KUBELET_VERSION}-)
-KUBEADM=$(getversion kubeadm ${KUBELET_VERSION}-)
-KUBECTL=$(getversion kubectl ${KUBELET_VERSION}-)
-apt-get install -y docker.io=${DOCKER_VER}
-
-### TEMPORARY solution
-# https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/issues/238
-# Currently, ubuntu packaging includes kubernetes-cni 0.7.5 when performing
-# apt-get install kubernetes-cni.  Older versions of k8s complains and this
-# script fails.  This will install 0.7.5 for k8s 1.14 and higher.  It will
-# fall back to 0.6.0 for older versions.
-
-if [[ "${KUBELET_VERSION}" -ge "1.14" ]]; then
-	apt-get install -y kubernetes-cni=0.7.*
-else
-	apt-get install -y kubernetes-cni=0.6.*
-fi
-
-apt-get install -y kubelet=${KUBELET} kubeadm=${KUBEADM} kubectl=${KUBECTL}
-
-{{- end }}{{/* end install */}}
-
-{{ define "configure" -}}
-TOKEN={{ .Token }}
-MASTER={{ index .Cluster.Status.APIEndpoints 0 | endpoint }}
-MACHINE={{ .Machine.ObjectMeta.Namespace }}/{{ .Machine.ObjectMeta.Name }}
-NODE_LABEL_OPTION={{ if .Machine.Spec.Labels }}--node-labels={{ labelMap .Machine.Spec.Labels }}{{ end }}
-NODE_TAINTS_OPTION={{ if .Machine.Spec.Taints }}--register-with-taints={{ taintMap .Machine.Spec.Taints }}{{ end }}
-
-# Disable swap otherwise kubelet won't run
-swapoff -a
-sed -i '/ swap / s/^/#/' /etc/fstab
-
-systemctl enable docker || true
-systemctl start docker || true
-
-sysctl net.bridge.bridge-nf-call-iptables=1
-
-` +
-	"PUBLICIP=`ip route get 8.8.8.8 | awk '{for(i=1; i<=NF; i++) if($i~/src/) print $(i+1)}'`" + `
-
-cat > /etc/systemd/system/kubelet.service.d/20-cloud.conf << EOF
-[Service]
-Environment="KUBELET_EXTRA_ARGS=--node-ip=${PUBLICIP} --cloud-provider=vsphere ${NODE_LABEL_OPTION} ${NODE_TAINTS_OPTION}"
-EOF
-# clear the content of the /etc/default/kubelet otherwise in v 1.11.* it causes failure to use the env variable set in the 20-cloud.conf file above
-echo > /etc/default/kubelet
-systemctl daemon-reload
-
-kubeadm join --token "${TOKEN}" "${MASTER}" --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification
-
-for tries in $(seq 1 60); do
-	kubectl --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node $(hostname) cluster.k8s.io/machine=${MACHINE} && break
-	sleep 1
-done
-{{- end }}{{/* end configure */}}
-`
-
-const masterStartupScript = `
+const provisionScript = `
 {{ define "install" -}}
 
 KUBELET_VERSION={{ .Machine.Spec.Versions.Kubelet }}
@@ -519,9 +445,46 @@ apt-get install -y kubelet=${KUBELET} kubeadm=${KUBEADM}
 
 mv /usr/bin/kubeadm.dl /usr/bin/kubeadm
 chmod a+rx /usr/bin/kubeadm
-{{- end }}{{/* end install */}}
+{{- end }}{{/* end install */}}`
 
+const nodeStartupScript = `
+{{ define "configure" -}}
+TOKEN={{ .Token }}
+MASTER={{ index .Cluster.Status.APIEndpoints 0 | endpoint }}
+MACHINE={{ .Machine.ObjectMeta.Namespace }}/{{ .Machine.ObjectMeta.Name }}
+NODE_LABEL_OPTION={{ if .Machine.Spec.Labels }}--node-labels={{ labelMap .Machine.Spec.Labels }}{{ end }}
+NODE_TAINTS_OPTION={{ if .Machine.Spec.Taints }}--register-with-taints={{ taintMap .Machine.Spec.Taints }}{{ end }}
 
+# Disable swap otherwise kubelet won't run
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+systemctl enable docker || true
+systemctl start docker || true
+
+sysctl net.bridge.bridge-nf-call-iptables=1
+
+` +
+	"PUBLICIP=`ip route get 8.8.8.8 | awk '{for(i=1; i<=NF; i++) if($i~/src/) print $(i+1)}'`" + `
+
+cat > /etc/systemd/system/kubelet.service.d/20-cloud.conf << EOF
+[Service]
+Environment="KUBELET_EXTRA_ARGS=--node-ip=${PUBLICIP} --cloud-provider=vsphere ${NODE_LABEL_OPTION} ${NODE_TAINTS_OPTION}"
+EOF
+# clear the content of the /etc/default/kubelet otherwise in v 1.11.* it causes failure to use the env variable set in the 20-cloud.conf file above
+echo > /etc/default/kubelet
+systemctl daemon-reload
+
+kubeadm join --token "${TOKEN}" "${MASTER}" --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification
+
+for tries in $(seq 1 60); do
+	kubectl --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node $(hostname) cluster.k8s.io/machine=${MACHINE} && break
+	sleep 1
+done
+{{- end }}{{/* end configure */}}
+`
+
+const masterStartupScript = `
 {{ define "configure" -}}
 PORT=443
 MACHINE={{ .Machine.ObjectMeta.Name }}
@@ -640,6 +603,7 @@ apiServer:
     hostPath: /etc/kubernetes/cloud-config
     mountPath: /etc/kubernetes/cloud-config
     readOnly: true
+controlPlaneEndpoint: ${PRIVATEIP}:443
 controllerManager:
   extraArgs:
     cloud-provider: vsphere
@@ -873,5 +837,44 @@ for tries in $(seq 1 60); do
 	sleep 1
 done
 
+{{- end }}{{/* end configure */}}
+`
+
+const masterJoinScript = `
+{{ define "configure" -}}
+TOKEN={{ .Token }}
+CERTIFICATE_KEY={{ .CertificateKey }}
+MASTER={{ index .Cluster.Status.APIEndpoints 0 | endpoint }}
+MACHINE={{ .Machine.ObjectMeta.Namespace }}/{{ .Machine.ObjectMeta.Name }}
+NODE_LABEL_OPTION={{ if .Machine.Spec.Labels }}--node-labels={{ labelMap .Machine.Spec.Labels }}{{ end }}
+NODE_TAINTS_OPTION={{ if .Machine.Spec.Taints }}--register-with-taints={{ taintMap .Machine.Spec.Taints }}{{ end }}
+
+# Disable swap otherwise kubelet won't run
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+systemctl enable docker || true
+systemctl start docker || true
+
+sysctl net.bridge.bridge-nf-call-iptables=1
+
+` +
+	"PUBLICIP=`ip route get 8.8.8.8 | awk '{for(i=1; i<=NF; i++) if($i~/src/) print $(i+1)}'`" + `
+
+cat > /etc/systemd/system/kubelet.service.d/20-cloud.conf << EOF
+[Service]
+Environment="KUBELET_EXTRA_ARGS=--node-ip=${PUBLICIP} --cloud-provider=vsphere ${NODE_LABEL_OPTION} ${NODE_TAINTS_OPTION}"
+EOF
+# clear the content of the /etc/default/kubelet otherwise in v 1.11.* it causes failure to use the env variable set in the 20-cloud.conf file above
+echo > /etc/default/kubelet
+systemctl daemon-reload
+
+kubeadm join --token "${TOKEN}" "${MASTER}" --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification --experimental-control-plane \
+--certificate-key "${CERTIFICATE_KEY}"
+
+for tries in $(seq 1 60); do
+	kubectl --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node $(hostname) cluster.k8s.io/machine=${MACHINE} && break
+	sleep 1
+done
 {{- end }}{{/* end configure */}}
 `

@@ -25,6 +25,34 @@ var (
 	DefaultSSHPublicKeyFile = "/root/.ssh/vsphere_tmp.pub"
 )
 
+func (pv *Provisioner) UploadKubeadmCertificates(cluster *clusterv1.Cluster) error {
+
+	if cluster.ObjectMeta.Annotations == nil {
+		cluster.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	if _, ok := cluster.ObjectMeta.Annotations[constants.KubeadmCertificateKey]; !ok {
+		certificateKey, err := vsphereutils.CreateCertificateKey()
+		if err != nil {
+			return fmt.Errorf("unable to create certificate key, %v", err)
+		}
+		cluster.ObjectMeta.Annotations[constants.KubeadmCertificateKey] = certificateKey
+		_, err = pv.clusterV1alpha1.Clusters(cluster.Namespace).Update(cluster)
+		if err != nil {
+			return fmt.Errorf("unable to cache the certificte key on cluster object, %v", err)
+		}
+	}
+
+	masters, err := vsphereutils.GetMasterForCluster(cluster, pv.lister)
+	if err != nil {
+		return err
+	}
+	if len(masters) == 0 {
+		return errors.New("No master available")
+	}
+	return vsphereutils.UploadKubeadmCertificates(cluster, masters[0])
+}
+
 func (pv *Provisioner) GetKubeadmToken(cluster *clusterv1.Cluster) (string, error) {
 	var token string
 	if cluster.ObjectMeta.Annotations != nil {

@@ -19,7 +19,7 @@ import (
 	"k8s.io/klog"
 	vsphereconfigv1 "sigs.k8s.io/cluster-api-provider-vsphere/pkg/apis/vsphereproviderconfig/v1alpha1"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/constants"
-	vpshereprovisionercommon "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/provisioner/common"
+	vsphereprovisionercommon "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/provisioner/common"
 	vsphereutils "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/utils"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clustererror "sigs.k8s.io/cluster-api/pkg/controller/error"
@@ -59,6 +59,15 @@ func (pv *Provisioner) Create(ctx context.Context, cluster *clusterv1.Cluster, m
 		pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Created", "Created Machine %s(%s)", machine.Name, vmRef)
 		// Update the Machine object with the VM Reference annotation
 		_, err := pv.updateVMReference(machine, vmRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	// if this is a control-plane join, we must prep the certificate secrets & credential-key
+	// requires kubeadm command (ssh) on existing master
+	if util.IsControlPlaneMachine(machine) && len(cluster.Status.APIEndpoints) > 0 {
+		err := pv.UploadKubeadmCertificates(cluster)
 		if err != nil {
 			return err
 		}
@@ -435,7 +444,7 @@ func (pv *Provisioner) getCloudInitMetaData(cluster *clusterv1.Cluster, machine 
 	if err != nil {
 		return "", err
 	}
-	metadata, err := vpshereprovisionercommon.GetCloudInitMetaData(machine.Name, machineconfig)
+	metadata, err := vsphereprovisionercommon.GetCloudInitMetaData(machine.Name, machineconfig)
 	if err != nil {
 		return "", err
 	}
@@ -460,8 +469,8 @@ func (pv *Provisioner) getCloudInitUserData(cluster *clusterv1.Cluster, machine 
 	if err != nil {
 		return "", err
 	}
-	userdata, err := vpshereprovisionercommon.GetCloudInitUserData(
-		vpshereprovisionercommon.CloudInitTemplate{
+	userdata, err := vsphereprovisionercommon.GetCloudInitUserData(
+		vsphereprovisionercommon.CloudInitTemplate{
 			Script:              script,
 			IsMaster:            util.IsControlPlaneMachine(machine),
 			CloudProviderConfig: config,
@@ -499,7 +508,7 @@ func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machin
 	}
 
 	// TODO(ssurana): revisit once we solve https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/issues/60
-	cpc := vpshereprovisionercommon.CloudProviderConfigTemplate{
+	cpc := vsphereprovisionercommon.CloudProviderConfigTemplate{
 		Datacenter:   machineconfig.MachineSpec.Datacenter,
 		Server:       server,
 		Insecure:     true, // TODO(ssurana): Needs to be a user input
@@ -513,7 +522,7 @@ func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machin
 		cpc.Network = machineconfig.MachineSpec.Networks[0].NetworkName
 	}
 
-	cloudProviderConfig, err := vpshereprovisionercommon.GetCloudProviderConfigConfig(cpc)
+	cloudProviderConfig, err := vsphereprovisionercommon.GetCloudProviderConfigConfig(cpc)
 	if err != nil {
 		return "", err
 	}
@@ -530,27 +539,70 @@ func (pv *Provisioner) getStartupScript(cluster *clusterv1.Cluster, machine *clu
 			"Cannot unmarshal providerSpec field: %v", err), constants.CreateEventAction)
 	}
 	preloaded := machineconfig.MachineSpec.Preloaded
+
 	var startupScript string
+
 	if util.IsControlPlaneMachine(machine) {
 		if machine.Spec.Versions.ControlPlane == "" {
 			return "", pv.HandleMachineError(machine, apierrors.InvalidMachineConfiguration(
 				"invalid master configuration: missing Machine.Spec.Versions.ControlPlane"), constants.CreateEventAction)
 		}
+
 		parsedVersion, err := version.ParseSemantic(machine.Spec.Versions.ControlPlane)
 		if err != nil {
 			return "", err
 		}
 
-		startupScript, err = vpshereprovisionercommon.GetMasterStartupScript(
-			vpshereprovisionercommon.TemplateParams{
-				MajorMinorVersion: fmt.Sprintf("%d.%d", parsedVersion.Major(), parsedVersion.Minor()),
-				Cluster:           cluster,
-				Machine:           machine,
-				Preloaded:         preloaded,
-			},
-		)
-		if err != nil {
-			return "", err
+		// it's questionable to use cluster status to find out if this is the
+		// first master, since the cluster is arguably not present in all
+		// cluster-api cases.  But it seems like the best option here.
+		//
+		// Alternatively, cluster-api-provider-aws interrogates ec2svc to see
+		// if a master machine exists, and joins if it does. We could do that?
+		// Would require tagging machines in vsphere with a cluster and role
+		// and then doing lookup.
+
+		isControlPlaneJoin := false
+		if len(cluster.Status.APIEndpoints) > 0 {
+			isControlPlaneJoin = true
+		}
+
+		if isControlPlaneJoin {
+			certificateKey, err := vsphereutils.ReadClusterCertificateKey(cluster)
+			if err != nil {
+				return "", err
+			}
+			kubeadmToken, err := pv.GetKubeadmToken(cluster)
+			if err != nil {
+				duration := vsphereutils.GetNextBackOff()
+				klog.Infof("Error generating kubeadm token, will retry in %s error: %s", duration, err.Error())
+				return "", &clustererror.RequeueAfterError{RequeueAfter: duration}
+			}
+			startupScript, err = vsphereprovisionercommon.GetMasterJoinScript(
+				vsphereprovisionercommon.TemplateParams{
+					Token:             kubeadmToken,
+					CertificateKey:    certificateKey,
+					MajorMinorVersion: fmt.Sprintf("%d.%d", parsedVersion.Major(), parsedVersion.Minor()),
+					Cluster:           cluster,
+					Machine:           machine,
+					Preloaded:         preloaded,
+				},
+			)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			startupScript, err = vsphereprovisionercommon.GetMasterStartupScript(
+				vsphereprovisionercommon.TemplateParams{
+					MajorMinorVersion: fmt.Sprintf("%d.%d", parsedVersion.Major(), parsedVersion.Minor()),
+					Cluster:           cluster,
+					Machine:           machine,
+					Preloaded:         preloaded,
+				},
+			)
+			if err != nil {
+				return "", err
+			}
 		}
 	} else {
 		clusterstatus, err := vsphereutils.GetClusterProviderStatus(cluster)
@@ -569,12 +621,14 @@ func (pv *Provisioner) getStartupScript(cluster *clusterv1.Cluster, machine *clu
 			klog.Infof("Error generating kubeadm token, will retry in %s error: %s", duration, err.Error())
 			return "", &clustererror.RequeueAfterError{RequeueAfter: duration}
 		}
+
 		parsedVersion, err := version.ParseSemantic(machine.Spec.Versions.Kubelet)
 		if err != nil {
 			return "", err
 		}
-		startupScript, err = vpshereprovisionercommon.GetNodeStartupScript(
-			vpshereprovisionercommon.TemplateParams{
+
+		startupScript, err = vsphereprovisionercommon.GetNodeStartupScript(
+			vsphereprovisionercommon.TemplateParams{
 				Token:             kubeadmToken,
 				MajorMinorVersion: fmt.Sprintf("%d.%d", parsedVersion.Major(), parsedVersion.Minor()),
 				Cluster:           cluster,

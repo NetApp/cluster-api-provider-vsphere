@@ -174,7 +174,7 @@ func GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (strin
 		"-q",
 		"-o", "StrictHostKeyChecking no",
 		"-o", "UserKnownHostsFile /dev/null",
-		fmt.Sprintf("ubuntu@%s", ip),
+		fmt.Sprintf("debian@%s", ip),
 		"sudo cat /etc/kubernetes/admin.conf")
 	cmd.Stdout = &out
 	cmd.Stderr = os.Stderr

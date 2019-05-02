@@ -262,7 +262,7 @@ func (pv *Provisioner) cloneVirtualMachine(s *SessionContext, cluster *clusterv1
 				prop.Info.Value = userData
 			}
 			if p.Id == "public-keys" {
-				prop.Info.Value, err = pv.GetSSHInternalKey(cluster)
+				prop.Info.Value, err = pv.GetClusterAPIControllerSSHKey(cluster)
 				if err != nil {
 					return err
 				}

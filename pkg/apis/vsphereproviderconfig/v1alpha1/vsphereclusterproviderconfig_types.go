@@ -50,7 +50,7 @@ type VsphereClusterProviderConfig struct {
 	VsphereUser             string   `json:"vsphereUser"`
 	VspherePassword         string   `json:"vspherePassword"`
 	VsphereServer           string   `json:"vsphereServer"`
-  VsphereCredentialSecret string `json:"vsphereCredentialSecret"`
+	VsphereCredentialSecret string   `json:"vsphereCredentialSecret"`
 	SSHKeys                 []string `json:"sshKeys"`
 }
 

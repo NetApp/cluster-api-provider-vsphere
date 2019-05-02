@@ -236,7 +236,7 @@ type CloudInitTemplate struct {
 	Script              string
 	IsMaster            bool
 	CloudProviderConfig string
-	SSHPublicKey        string
+	SSHPublicKeys       []string
 	TrustedCerts        []string
 }
 
@@ -289,7 +289,9 @@ const cloudInitUserData = `
 users:
 - name: ubuntu
   ssh_authorized_keys:
-    - {{ .SSHPublicKey }}
+  {{- range $sshKey := .SSHPublicKeys}}
+    - {{ $sshKey }}
+  {{- end }}
   sudo: ALL=(ALL) NOPASSWD:ALL
   groups: sudo
   shell: /bin/bash

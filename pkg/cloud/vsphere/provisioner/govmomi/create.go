@@ -262,7 +262,7 @@ func (pv *Provisioner) cloneVirtualMachine(s *SessionContext, cluster *clusterv1
 				prop.Info.Value = userData
 			}
 			if p.Id == "public-keys" {
-				prop.Info.Value, err = pv.GetSSHPublicKey(cluster)
+				prop.Info.Value, err = pv.GetClusterAPIControllerSSHKey(cluster)
 				if err != nil {
 					return err
 				}
@@ -452,7 +452,7 @@ func (pv *Provisioner) getCloudInitUserData(cluster *clusterv1.Cluster, machine 
 	if err != nil {
 		return "", err
 	}
-	publicKey, err := pv.GetSSHPublicKey(cluster)
+	publicKeys, err := pv.GetSSHPublicKeys(cluster)
 	if err != nil {
 		return "", err
 	}
@@ -465,7 +465,7 @@ func (pv *Provisioner) getCloudInitUserData(cluster *clusterv1.Cluster, machine 
 			Script:              script,
 			IsMaster:            util.IsControlPlaneMachine(machine),
 			CloudProviderConfig: config,
-			SSHPublicKey:        publicKey,
+			SSHPublicKeys:       publicKeys,
 			TrustedCerts:        machineconfig.MachineSpec.TrustedCerts,
 		},
 	)

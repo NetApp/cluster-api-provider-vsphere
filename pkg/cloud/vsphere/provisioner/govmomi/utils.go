@@ -165,7 +165,7 @@ func (pv *Provisioner) HandleClusterError(cluster *clusterv1.Cluster, err *apier
 	return err
 }
 
-func (pv *Provisioner) GetSSHPublicKey(cluster *clusterv1.Cluster) (string, error) {
+func (pv *Provisioner) GetSSHInternalKey(cluster *clusterv1.Cluster) (string, error) {
 	// First try to read the public key file from the mounted secrets volume
 	key, err := ioutil.ReadFile(DefaultSSHPublicKeyFile)
 	if err == nil {
@@ -181,6 +181,26 @@ func (pv *Provisioner) GetSSHPublicKey(cluster *clusterv1.Cluster) (string, erro
 		return "", err
 	}
 	return string(secret.Data["vsphere_tmp.pub"]), nil
+}
+
+func (pv *Provisioner) GetSSHPublicKeys(cluster *clusterv1.Cluster) ([]string, error) {
+	sshKeys := []string{}
+
+	defaultKey, err := pv.GetSSHInternalKey(cluster)
+	if err != nil {
+		return sshKeys, err
+	}
+
+	sshKeys = append(sshKeys, defaultKey)
+
+	clusterConfig, err := vsphereutils.GetClusterProviderSpec(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return sshKeys, err
+	}
+
+	sshKeys = append(sshKeys, clusterConfig.SSHKeys...)
+
+	return sshKeys, nil
 }
 
 func (pv *Provisioner) GetKubeConfig(cluster *clusterv1.Cluster) (string, error) {

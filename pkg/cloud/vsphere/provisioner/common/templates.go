@@ -306,7 +306,9 @@ const cloudInitDebianUserData = `
 users:
 - name: debian
   ssh_authorized_keys:
-    - {{ .SSHPublicKey }}
+  {{- range $sshKey := .SSHPublicKeys}}
+    - {{ $sshKey }}
+  {{- end }}
   sudo: ALL=(ALL) NOPASSWD:ALL
   groups: sudo
   shell: /bin/bash

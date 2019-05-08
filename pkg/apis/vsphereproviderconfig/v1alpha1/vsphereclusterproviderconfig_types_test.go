@@ -34,7 +34,9 @@ func TestStorageVsphereClusterProviderConfig(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
-		}}
+		},
+		SSHKeys: make([]string, 0),
+	}
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create

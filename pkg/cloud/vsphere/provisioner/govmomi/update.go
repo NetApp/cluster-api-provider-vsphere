@@ -57,10 +57,20 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	if _, err := vsphereutils.GetIP(cluster, machine); err != nil {
 		klog.V(4).Info("actuator.Update() - did not find IP, waiting on IP")
 		vm := object.NewVirtualMachine(s.session.Client, vmref)
-		vmIP, err := vm.WaitForIP(updatectx)
+		var vmIP string
+		macToIPMap, err := vm.WaitForNetIP(updatectx, true, "ethernet-0")
 		if err != nil {
 			return err
 		}
+
+		// macToIPMap will contain only one MAC address, the one for ethernet-0
+		// Return the first (and only) IPv4 address found
+		for _, ips := range macToIPMap {
+			for _, ip := range ips {
+				vmIP = ip
+			}
+		}
+
 		pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "IP Detected", "IP %s detected for Virtual Machine %s", vmIP, vm.Name())
 		return pv.updateIP(cluster, machine, vmIP)
 	}

@@ -80,5 +80,23 @@ spec:
       }
     }
 
+    stage('publish') {
+      environment {
+        GIT_COMMIT_SHORT = sh(
+                script: "printf \$(git rev-parse --short ${GIT_COMMIT})",
+                returnStdout: true
+        ).trim()
+      }
+      steps {
+        container('builder-base') {
+          script {
+            docker.withRegistry("https://$DOCKER_REGISTRY", "gcr:$ORG") {
+              image.push("netapp-$GIT_COMMIT_SHORT")
+            }
+          }
+        }
+      }
+    }
+
   }
 }

@@ -60,6 +60,15 @@ spec:
       }
     }
 
+    stage('manifests'){
+      steps {
+        container('golang') {
+          dir('/home/jenkins/go/src/github.com/NetApp/cluster-api-provider-vsphere') {
+            sh('go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all')
+          }
+        }
+      }
+    }
 
   }
 }

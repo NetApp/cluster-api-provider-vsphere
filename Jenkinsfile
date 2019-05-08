@@ -70,5 +70,15 @@ spec:
       }
     }
 
+    stage('build') {
+      steps {
+        container('builder-base') {
+          script {
+            image = docker.build("$ORG/$APP_NAME")
+          }
+        }
+      }
+    }
+
   }
 }

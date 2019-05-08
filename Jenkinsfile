@@ -40,7 +40,7 @@ spec:
   }
 
   environment {
-    ORG        = 'stackpointio-public'
+    ORG        = 'stackpoint-public'
     APP_NAME   = 'cluster-api-provider-vsphere'
     REPOSITORY = "$DOCKER_REGISTRY/$ORG/$APP_NAME"
     GO111MODULE = 'off'

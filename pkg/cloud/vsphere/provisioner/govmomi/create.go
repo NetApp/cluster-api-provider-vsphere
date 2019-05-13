@@ -476,16 +476,7 @@ func (pv *Provisioner) getCloudInitUserData(cluster *clusterv1.Cluster, machine 
 	return userdata, nil
 }
 
-func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-	clusterConfig, err := vsphereutils.GetClusterProviderSpec(cluster.Spec.ProviderSpec)
-	if err != nil {
-		return "", err
-	}
-	machineconfig, err := vsphereutils.GetMachineProviderSpec(machine.Spec.ProviderSpec)
-	if err != nil {
-		return "", err
-	}
-
+func getServerFromClusterConfig(clusterConfig *vsphereconfigv1.VsphereClusterProviderConfig) string {
 	// cloud provider requires bare IP:port, so if it is parseable as a url with a scheme, then
 	// strip the scheme and path.  Otherwise continue.  TODO replace with better input validation.
 	var server string
@@ -497,6 +488,20 @@ func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machin
 		server = clusterConfig.VsphereServer
 		klog.Infof("Using input vSphere server url: %s", server)
 	}
+	return server
+}
+
+func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+	clusterConfig, err := vsphereutils.GetClusterProviderSpec(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return "", err
+	}
+	machineconfig, err := vsphereutils.GetMachineProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return "", err
+	}
+
+	server := getServerFromClusterConfig(clusterConfig)
 
 	username, password, err := pv.GetVsphereCredentials(cluster)
 	if err != nil {
@@ -546,12 +551,26 @@ func (pv *Provisioner) getStartupScript(cluster *clusterv1.Cluster, machine *clu
 			return "", err
 		}
 
+		clusterConfig, err := vsphereutils.GetClusterProviderSpec(cluster.Spec.ProviderSpec)
+		if err != nil {
+			return "", err
+		}
+		server := getServerFromClusterConfig(clusterConfig)
+
+		username, password, err := pv.GetVsphereCredentials(cluster)
+		if err != nil {
+			return "", err
+		}
+
 		startupScript, err = vpshereprovisionercommon.GetMasterStartupScript(
 			vpshereprovisionercommon.TemplateParams{
 				MajorMinorVersion: fmt.Sprintf("%d.%d", parsedVersion.Major(), parsedVersion.Minor()),
 				Cluster:           cluster,
 				Machine:           machine,
 				Preloaded:         preloaded,
+				Server:            server,
+				UserNameB64:       base64.StdEncoding.EncodeToString([]byte(username)),
+				PasswordB64:       base64.StdEncoding.EncodeToString([]byte(password)),
 			},
 		)
 		if err != nil {

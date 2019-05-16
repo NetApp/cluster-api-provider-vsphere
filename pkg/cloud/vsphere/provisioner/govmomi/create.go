@@ -503,18 +503,11 @@ func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machin
 
 	server := getServerFromClusterConfig(clusterConfig)
 
-	username, password, err := pv.GetVsphereCredentials(cluster)
-	if err != nil {
-		return "", err
-	}
-
 	// TODO(ssurana): revisit once we solve https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/issues/60
 	cpc := vpshereprovisionercommon.CloudProviderConfigTemplate{
 		Datacenter:   machineconfig.MachineSpec.Datacenter,
 		Server:       server,
 		Insecure:     true, // TODO(ssurana): Needs to be a user input
-		UserName:     username,
-		Password:     password,
 		ResourcePool: machineconfig.MachineSpec.ResourcePool,
 		Datastore:    machineconfig.MachineSpec.Datastore,
 		Network:      "",

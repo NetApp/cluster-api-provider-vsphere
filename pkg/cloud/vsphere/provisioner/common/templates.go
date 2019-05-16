@@ -209,8 +209,6 @@ type CloudProviderConfigTemplate struct {
 	Datacenter   string
 	Server       string
 	Insecure     bool
-	UserName     string
-	Password     string
 	ResourcePool string
 	Datastore    string
 	Network      string
@@ -347,9 +345,7 @@ insecure-flag = "{{ if .Insecure }}1{{ else }}0{{ end }}" #set to 1 if the vCent
 secret-name = "vccm"
 secret-namespace = "kube-system"
 
-[VirtualCenter "{{ .Server }}"]
-        user = "{{ .UserName }}"
-        password = "{{ .Password }}"
+[VirtualCenter "{{ .Server }}"]                
 
 [Workspace]
         server = "{{ .Server }}"

@@ -209,6 +209,8 @@ type CloudProviderConfigTemplate struct {
 	Datacenter   string
 	Server       string
 	Insecure     bool
+	UserName     string
+	Password     string
 	ResourcePool string
 	Datastore    string
 	Network      string

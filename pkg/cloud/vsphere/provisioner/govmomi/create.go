@@ -508,6 +508,8 @@ func (pv *Provisioner) getCloudProviderConfig(cluster *clusterv1.Cluster, machin
 		Datacenter:   machineconfig.MachineSpec.Datacenter,
 		Server:       server,
 		Insecure:     true, // TODO(ssurana): Needs to be a user input
+		UserName:     "",
+		Password:     "",
 		ResourcePool: machineconfig.MachineSpec.ResourcePool,
 		Datastore:    machineconfig.MachineSpec.Datastore,
 		Network:      "",

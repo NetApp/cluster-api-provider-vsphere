@@ -80,7 +80,10 @@ spec:
       }
     }
 
-    stage('publish') {
+    stage('publish: netapp') {
+      when {
+        branch 'netapp'
+      }
       environment {
         GIT_COMMIT_SHORT = sh(
                 script: "printf \$(git rev-parse --short ${GIT_COMMIT})",

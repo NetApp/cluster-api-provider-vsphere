@@ -38,6 +38,9 @@ type TemplateParams struct {
 	Machine           *clusterv1.Machine
 	DockerImages      []string
 	Preloaded         bool
+	Server            string
+	UserNameB64       string
+	PasswordB64       string
 }
 
 // Returns the startup script for the nodes.
@@ -341,10 +344,10 @@ const cloudProviderConfig = `
 [Global]
 datacenters = "{{ .Datacenter }}"
 insecure-flag = "{{ if .Insecure }}1{{ else }}0{{ end }}" #set to 1 if the vCenter uses a self-signed cert
+secret-name = "vccm"
+secret-namespace = "kube-system"
 
-[VirtualCenter "{{ .Server }}"]
-        user = "{{ .UserName }}"
-        password = "{{ .Password }}"
+[VirtualCenter "{{ .Server }}"]                
 
 [Workspace]
         server = "{{ .Server }}"
@@ -1352,6 +1355,20 @@ for tries in $(seq 1 60); do
 	kubectl --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node $(hostname) cluster.k8s.io/machine=${MACHINE} && break
 	sleep 1
 done
+
+# create credentials secret
+cat > /tmp/vccm.yaml << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vccm
+  namespace: kube-system
+data:
+  {{ .Server }}.username: {{ .UserNameB64 }}
+  {{ .Server }}.password: {{ .PasswordB64 }}
+EOF
+
+kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f /tmp/vccm.yaml
 
 {{- end }}{{/* end configure */}}
 `

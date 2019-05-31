@@ -366,7 +366,6 @@ secret-namespace = "kube-system"
 const genericTemplates = `
 {{ define "fullScript" -}}
   {{ template "startScript" . }}
-  {{ template "install" . }}
   {{ template "configure" . }}
   {{ template "endScript" . }}
 {{- end }}
@@ -483,51 +482,6 @@ done
 `
 
 const nodeDebianStartupScript = `
-{{ define "install" -}}
-
-apt-get update
-apt-get install -y apt-transport-https prips software-properties-common
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
-
-sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/debian \
-   $(lsb_release -cs) \
-   stable"
-
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-
-cat <<EOF > /etc/apt/sources.list.d/kubernetes.list
-deb https://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-
-apt-get update
-
-apt-get install -y --allow-downgrades docker-ce=17.06.0~ce-0~debian
-
-KUBELET_VERSION={{ .Machine.Spec.Versions.Kubelet }}
-
-#DOCKER_VER=$(getversion docker.io 18.06)
-KUBELET=${KUBELET_VERSION}-00
-KUBEADM=${KUBELET_VERSION}-00
-KUBECTL=${KUBELET_VERSION}-00
-
-### TEMPORARY solution
-# https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/issues/238
-# Currently, ubuntu packaging includes kubernetes-cni 0.7.5 when performing
-# apt-get install kubernetes-cni.  Older versions of k8s complains and this
-# script fails.  This will install 0.7.5 for k8s 1.14 and higher.  It will
-# fall back to 0.6.0 for older versions.
-
-if [[ "${KUBELET_VERSION}" -ge "1.14" ]]; then
-	apt-get install -y kubernetes-cni=0.7.*
-else
-	apt-get install -y kubernetes-cni=0.6.*
-fi
-
-apt-get install -y kubelet=${KUBELET} kubeadm=${KUBEADM} kubectl=${KUBECTL}
-
-{{- end }}{{/* end install */}}
-
 {{ define "configure" -}}
 TOKEN={{ .Token }}
 MASTER={{ index .Cluster.Status.APIEndpoints 0 | endpoint }}
@@ -950,61 +904,6 @@ done
 `
 
 const masterDebianStartupScript = `
-{{ define "install" -}}
-
-KUBELET_VERSION={{ .Machine.Spec.Versions.Kubelet }}
-
-apt-get update
-
-apt-get install -y \
-    socat \
-    ebtables \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg2 \
-    jq \
-    cloud-utils \
-    prips \
-    software-properties-common
-
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
-
-sudo add-apt-repository \
-    "deb [arch=amd64] https://download.docker.com/linux/debian \
-    $(lsb_release -cs) \
-    stable"
-
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-
-cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
-deb https://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-
-apt-get update -y
-
-apt-get install -y --allow-downgrades docker-ce=17.06.0~ce-0~debian
-
-### TEMPORARY solution
-# https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/issues/238
-# Currently, ubuntu packaging includes kubernetes-cni 0.7.5 when performing
-# apt-get install kubernetes-cni.  Older versions of k8s complains and this
-# script fails.  This will install 0.7.5 for k8s 1.14 and higher.  It will
-# fall back to 0.6.0 for older versions.
-
-if [[ "${KUBELET_VERSION}" -ge "1.14" ]]; then
-	apt-get install -y kubernetes-cni=0.7.*
-else
-	apt-get install -y kubernetes-cni=0.6.*
-fi
-
-apt-get install -y \
-    kubelet=${KUBELET_VERSION}-00 \
-    kubeadm=${KUBELET_VERSION}-00
-
-{{- end }}{{/* end install */}}
-
-
 {{ define "configure" -}}
 PORT=443
 MACHINE={{ .Machine.ObjectMeta.Name }}

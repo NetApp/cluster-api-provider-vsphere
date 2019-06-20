@@ -36,6 +36,7 @@ type TemplateParams struct {
 	MajorMinorVersion string
 	Cluster           *clusterv1.Cluster
 	Machine           *clusterv1.Machine
+	Datastore         string
 	DockerImages      []string
 	Preloaded         bool
 	Server            string
@@ -907,6 +908,7 @@ const masterDebianStartupScript = `
 {{ define "configure" -}}
 PORT=443
 MACHINE={{ .Machine.ObjectMeta.Name }}
+DATASTORE={{ .Datastore }}
 CONTROL_PLANE_VERSION={{ .Machine.Spec.Versions.ControlPlane }}
 CLUSTER_DNS_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
 POD_CIDR={{ getSubnet .Cluster.Spec.ClusterNetwork.Pods }}
@@ -1268,6 +1270,23 @@ data:
 EOF
 
 kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f /tmp/vccm.yaml
+
+# create default storage class
+cat > /tmp/default_storage_class.yaml << EOF
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vsphere
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/vsphere-volume
+parameters:
+  datastore: {{.Datastore}}
+  diskformat: thin
+  fstype: ext3
+EOF
+
+kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f /tmp/default_storage_class.yaml
 
 {{- end }}{{/* end configure */}}
 `

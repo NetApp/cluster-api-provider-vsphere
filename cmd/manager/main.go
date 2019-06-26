@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,42 +18,81 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	"net/http/pprof"
 	"time"
 
-	"github.com/spf13/pflag"
+	"github.com/pkg/errors"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog"
-
-	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/apis"
-	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/controller"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
+	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
+	"sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset"
+	capicluster "sigs.k8s.io/cluster-api/pkg/controller/cluster"
+	capimachine "sigs.k8s.io/cluster-api/pkg/controller/machine"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
-)
 
-var (
-	namedMachinesPath = pflag.String("namedmachines", "", "path to named machines yaml file")
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/apis"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/actuators/cluster"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/actuators/machine"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/record"
 )
 
 func main() {
 	klog.InitFlags(nil)
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	pflag.Set("logtostderr", "true")
-	pflag.Parse()
+	flag.Set("logtostderr", "true")
+	watchNamespace := flag.String("namespace", "",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
+	profilerAddr := flag.String("profiler-address", "", "the address to expose the pprof profiler")
 
-	// Get a config to talk to the apiserver
-	cfg, err := config.GetConfig()
-	if err != nil {
-		klog.Fatalf("Failed to get config: %s", err.Error())
-	}
-	var syncPeriod = 120 * time.Second
-	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, manager.Options{SyncPeriod: &(syncPeriod)})
-	if err != nil {
-		klog.Fatal(err)
+	flag.Parse()
+
+	if addr := *profilerAddr; addr != "" {
+		go runProfiler(addr)
 	}
 
-	// Setup Scheme for all resources
+	cfg := config.GetConfigOrDie()
+
+	// Setup a Manager
+	syncPeriod := 10 * time.Minute
+	opts := manager.Options{
+		SyncPeriod: &syncPeriod,
+	}
+
+	if *watchNamespace != "" {
+		opts.Namespace = *watchNamespace
+		klog.Infof("Watching cluster-api objects only in namespace %q for reconciliation.", opts.Namespace)
+	}
+
+	mgr, err := manager.New(cfg, opts)
+	if err != nil {
+		klog.Fatalf("Failed to set up overall controller manager: %v", err)
+	}
+
+	cs, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		klog.Fatalf("Failed to create client from configuration: %v", err)
+	}
+
+	coreClient, err := corev1.NewForConfig(cfg)
+	if err != nil {
+		klog.Fatalf("Failed to create corev1 client from configuration: %v", err)
+	}
+
+	// Initialize event recorder.
+	record.InitFromRecorder(mgr.GetRecorder("vsphere-controller"))
+
+	// Initialize cluster actuator.
+	clusterActuator := cluster.NewActuator(cs.ClusterV1alpha1(), coreClient)
+
+	// Initialize machine actuator.
+	machineActuator := machine.NewActuator(cs.ClusterV1alpha1(), coreClient)
+
+	// Register the cluster actuator as the deployer.
+	common.RegisterClusterProvisioner("vsphere", clusterActuator)
+
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
 		klog.Fatal(err)
 	}
@@ -62,13 +101,23 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	// Setup all Controllers
-	if err := controller.AddToManager(mgr); err != nil {
-		klog.Fatal(err)
+	capimachine.AddWithActuator(mgr, machineActuator)
+	capicluster.AddWithActuator(mgr, clusterActuator)
+
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+		klog.Fatalf("Failed to run manager: %v", err)
 	}
+}
 
-	klog.Info("Starting the Cmd.")
+func runProfiler(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	// Start the Cmd
-	klog.Fatal(mgr.Start(signals.SetupSignalHandler()))
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		klog.Error(errors.Wrap(err, "error running pprof"))
+	}
 }

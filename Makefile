@@ -12,8 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+all: build test
+
+# Store the original working directory.
+CWD := $(abspath .)
+
+# Ensure that the Makefile targets execute from the GOPATH due to the K8s tools
+# failing if executed outside the GOPATH. This work-around:
+#   1. Creates a sub-directory named ".gopath" to act as a new GOPATH
+#   2. Symlinks the current directory into ".gopath/src/sigs.k8s.io/cluster-api-provider-vsphere"
+#   3. Sets the Makefile's SHELL variable to "hack/shell-with-gopath.sh" to
+#      cause all sub-shells opened by this Makefile to execute from inside the
+#      nested GOPATH.
+SHELL := hack/shell-with-gopath.sh
+
 # Image URL to use all building/pushing image targets
-PRODUCTION_IMG ?= gcr.io/cnx-cluster-api/vsphere-cluster-api-provider:0.2.0
+PRODUCTION_IMG ?= gcr.io/cnx-cluster-api/vsphere-cluster-api-provider:0.3.0-alpha.1
 CI_IMG ?= gcr.io/cnx-cluster-api/vsphere-cluster-api-provider
 CLUSTERCTL_CI_IMG ?= gcr.io/cnx-cluster-api/clusterctl
 DEV_IMG ?= # <== NOTE:  outside dev, change this!!!
@@ -22,21 +36,20 @@ DEV_IMG ?= # <== NOTE:  outside dev, change this!!!
 VERSION ?= $(shell git describe --exact-match 2> /dev/null || \
 	   git describe --match=$(git rev-parse --short=8 HEAD) --always --dirty --abbrev=8)
 
-KUSTOMIZE_VERSION := $(shell kustomize version | awk '{ print $$2 }' | awk -F':' '{ print $$2} ')
-
-all: test manager clusterctl
-
-# Run tests
-test: generate fmt vet manifests
-	go test ./pkg/... ./cmd/... -coverprofile cover.out
-
 # Build manager binary
 manager: fmt vet
-	go build -o bin/manager sigs.k8s.io/cluster-api-provider-vsphere/cmd/manager
+	go build -o bin/manager ./cmd/manager
 
 # Build the clusterctl binary
 clusterctl: fmt vet
-	go build -o bin/clusterctl sigs.k8s.io/cluster-api-provider-vsphere/cmd/clusterctl
+	go build -o bin/clusterctl ./cmd/clusterctl
+
+clusterctl-in-docker:
+	docker run --rm -v $(CWD):/go/src/sigs.k8s.io/cluster-api-provider-vsphere \
+	  -w /go/src/sigs.k8s.io/cluster-api-provider-vsphere \
+	  -e GOOS -e GOHOSTOS golang:1.12 \
+	  go build -o bin/clusterctl ./cmd/clusterctl
+.PHONY: clusterctl-in-docker
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
@@ -53,20 +66,38 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	hack/update-generated.sh crd rbac
 
 # Run go fmt against code
-fmt:
+fmt: | generate
+ifneq (,$(strip $(shell command -v goformat 2>/dev/null)))
+	goformat -s -w ./pkg ./cmd
+else
 	go fmt ./pkg/... ./cmd/...
+endif
 
 # Run go vet against code
-vet:
+vet: | generate
 	go vet ./pkg/... ./cmd/...
 
 # Generate code
 generate:
-	go generate ./pkg/... ./cmd/...
+	hack/update-generated.sh codegen
 
+# Regenerating vendor cannot happen in a symlink due to the way certain Go
+# commands traverse the file structure. Fore more information please see
+# https://github.com/golang/go/issues/17451.
+vendor: export SHELL_WITH_GOPATH=0
+vendor: export GO111MODULE=on
+vendor:
+	go mod tidy -v
+	go mod vendor -v
+	go mod verify
+	_src="$$(go list -f '{{.Dir}}' sigs.k8s.io/cluster-api/cmd/clusterctl 2>/dev/null)/../../config" && \
+	_dst=./vendor/sigs.k8s.io/cluster-api/ && \
+	mkdir -p "$${_dst}" && \
+	cp -rf --no-preserve=mode "$${_src}" "$${_dst}"
+.PHONY: vendor
 
 ####################################
 # DEVELOPMENT Build and Push targets
@@ -74,24 +105,17 @@ generate:
 
 # Create YAML file for deployment
 dev-yaml:
-ifeq ($(KUSTOMIZE_VERSION),$(filter $(KUSTOMIZE_VERSION),unknown v1))
-	@echo "please upgrade kustomize version to v2 at least."
-else
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${DEV_IMG}"'@' ./config/default/vsphere_manager_image_patch.yaml
-	cmd/clusterctl/examples/vsphere/generate-yaml.sh
-endif
+	CAPV_MANAGER_IMAGE=$(DEV_IMG) hack/generate-yaml.sh
 
 # Build the docker image
-dev-build: test
-	docker build . -t ${DEV_IMG}
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${DEV_IMG}"'@' ./config/default/vsphere_manager_image_patch.yaml
+dev-build: #test
+	docker build . -t $(DEV_IMG)
 
 # Push the docker image
 dev-push:
-	docker push ${DEV_IMG}
+	docker push $(DEV_IMG)
 
+.PHONY: dev-yaml dev-build dev-push
 
 ###################################
 # PRODUCTION Build and Push targets
@@ -99,26 +123,19 @@ dev-push:
 
 # Create YAML file for deployment
 prod-yaml:
-ifeq ($(KUSTOMIZE_VERSION),$(filter $(KUSTOMIZE_VERSION),unknown v1))
-	@echo "please upgrade kustomize version to v2 at least."
-else
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${PRODUCTION_IMG}"'@' ./config/default/vsphere_manager_image_patch.yaml
-	cmd/clusterctl/examples/vsphere/generate-yaml.sh
-endif
+	CAPV_MANAGER_IMAGE=$(PRODUCTION_IMG) hack/generate-yaml.sh
 
 # Build the docker image
 prod-build: test
-	docker build . -t ${PRODUCTION_IMG}
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${PRODUCTION_IMG}"'@' ./config/default/vsphere_manager_image_patch.yaml
+	docker build . -t $(PRODUCTION_IMG)
 
 # Push the docker image
 prod-push:
 	@echo "logging into gcr.io registry with key file"
 	@docker login -u _json_key --password-stdin gcr.io <"$(GCR_KEY_FILE)"
-	docker push ${PRODUCTION_IMG}
+	docker push $(PRODUCTION_IMG)
 
+.PHONY: prod-yaml prod-build prod-push
 
 ###################################
 # CI Build and Push targets
@@ -126,15 +143,11 @@ prod-push:
 
 # Create YAML file for deployment into CI
 ci-yaml:
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"$(CI_IMG):$(VERSION)"'@' ./config/default/vsphere_manager_image_patch.yaml
-	cmd/clusterctl/examples/vsphere/generate-yaml.sh
+	CAPV_MANAGER_IMAGE=$(CI_IMG) hack/generate-yaml.sh
 
 ci-image: generate fmt vet manifests
 	docker build . -t "$(CI_IMG):$(VERSION)"
 	docker build . -f cmd/clusterctl/Dockerfile -t "$(CLUSTERCTL_CI_IMG):$(VERSION)"
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i.tmp -e 's@image: .*@image: '"$(CI_IMG):$(VERSION)"'@' ./config/default/vsphere_manager_image_patch.yaml
 
 ci-push: ci-image
 # Log into the registry with a service account file.  In CI, GCR_KEY_FILE contains the content and not the file name.
@@ -143,3 +156,18 @@ ci-push: ci-image
 	docker push "$(CI_IMG):$(VERSION)"
 	docker push "$(CLUSTERCTL_CI_IMG):$(VERSION)"
 	@echo docker logout gcr.io
+
+.PHONY: ci-yaml ci-image ci-push
+
+################################################################################
+##                          The default targets                               ##
+################################################################################
+
+# The default build target
+build: manager clusterctl
+.PHONY: build
+
+# The default test target
+test: build manifests
+	go test ./pkg/... ./cmd/... -coverprofile cover.out
+.PHONY: test

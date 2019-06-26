@@ -18,25 +18,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubeadmv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-type APIStatus string
-
-const (
-	ApiNotReady APIStatus = "NotReady"
-	ApiReady    APIStatus = "Ready"
-)
-
-// VsphereClusterProviderStatus defines the observed state of VsphereClusterProviderConfig
-type VsphereClusterProviderStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	LastUpdated string    `json:"lastUpdated"`
-	APIStatus   APIStatus `json:"clusterApiStatus"`
-}
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -47,11 +30,49 @@ type VsphereClusterProviderConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	VsphereUser             string   `json:"vsphereUser"`
-	VspherePassword         string   `json:"vspherePassword"`
+	VsphereUser             string   `json:"vsphereUser,omitempty"`
+	VspherePassword         string   `json:"vspherePassword,omitempty"`
 	VsphereServer           string   `json:"vsphereServer"`
-	VsphereCredentialSecret string   `json:"vsphereCredentialSecret"`
+	VsphereCredentialSecret string   `json:"vsphereCredentialSecret,omitempty"`
 	SSHKeys                 []string `json:"sshKeys"`
+
+	// SSHAuthorizedKeys is a list of SSH public keys authorized to access
+	// deployed machines.
+	//
+	// These keys are added to the default user as determined by cloud-init
+	// in the images from which the machines are deployed.
+	//
+	// The default user for CentOS is "centos".
+	// The default user for Ubuntu is "ubuntu".
+	SSHAuthorizedKeys []string `json:"sshAuthorizedKeys,omitempty"`
+
+	// CAKeyPair is the key pair for ca certs.
+	CAKeyPair KeyPair `json:"caKeyPair,omitempty"`
+
+	//EtcdCAKeyPair is the key pair for etcd.
+	EtcdCAKeyPair KeyPair `json:"etcdCAKeyPair,omitempty"`
+
+	// FrontProxyCAKeyPair is the key pair for FrontProxyKeyPair.
+	FrontProxyCAKeyPair KeyPair `json:"frontProxyCAKeyPair,omitempty"`
+
+	// SAKeyPair is the service account key pair.
+	SAKeyPair KeyPair `json:"saKeyPair,omitempty"`
+
+	// ClusterConfiguration holds the cluster-wide information used during a
+	// kubeadm init call.
+	ClusterConfiguration kubeadmv1beta1.ClusterConfiguration `json:"clusterConfiguration,omitempty"`
+}
+
+// KeyPair is how operators can supply custom keypairs for kubeadm to use.
+type KeyPair struct {
+	// base64 encoded cert and key
+	Cert []byte `json:"cert"`
+	Key  []byte `json:"key"`
+}
+
+// HasCertAndKey returns whether a keypair contains cert and key of non-zero length.
+func (kp KeyPair) HasCertAndKey() bool {
+	return len(kp.Cert) > 0 && len(kp.Key) > 0
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

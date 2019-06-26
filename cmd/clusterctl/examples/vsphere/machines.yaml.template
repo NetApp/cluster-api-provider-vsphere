@@ -1,44 +1,31 @@
-apiVersion: "cluster.k8s.io/v1alpha1"
+apiVersion: cluster.k8s.io/v1alpha1
 kind: MachineList
 items:
-  - apiVersion: "cluster.k8s.io/v1alpha1"
-    kind: Machine
-    metadata:
-      generateName: vs-master-
-      labels:
-        set: master
-        cluster.k8s.io/cluster-name: test1
-    spec:
-      providerSpec:
-        value:
-          apiVersion: "vsphereproviderconfig/v1alpha1"
-          kind: "VsphereMachineProviderConfig"
-          machineSpec:
-            datacenter: ""
-            datastore: ""
-            resourcePool: ""
-            networks:
-            - networkName: ""
-              ipConfig:
-                networkType: static
-                ip: ""
-                netmask: ""
-                gateway: ""
-                dns:
-                - xxxx
-                - yyyy
-            numCPUs: 2
-            memoryMB: 2048
-            template: ""
-            disks:
-            - diskLabel: ""
-              diskSizeGB: 20
-            preloaded: false
-            trustedCerts:
-            - zzzz
-            - aaaa
-      versions:
-        kubelet: 1.11.3
-        controlPlane: 1.11.3
-      roles:
-      - Master
+- apiVersion: cluster.k8s.io/v1alpha1
+  kind: Machine
+  metadata:
+    name: "${CLUSTER_NAME}-controlplane-1"
+    labels:
+      cluster.k8s.io/cluster-name: "${CLUSTER_NAME}"
+  spec:
+    providerSpec:
+      value:
+        apiVersion: vsphereproviderconfig/v1alpha1
+        kind: VsphereMachineProviderConfig
+        machineSpec:
+          datacenter: "${VSPHERE_DATACENTER}"
+          datastore: "${VSPHERE_DATASTORE}"
+          resourcePool: "${VSPHERE_RESOURCE_POOL}"
+          vmFolder: "${VSPHERE_FOLDER}"
+          network:
+            devices:
+            - networkName: "${VSPHERE_NETWORK}"
+              dhcp4: true
+              dhcp6: false
+          numCPUs: ${VSPHERE_NUM_CPUS}
+          memoryMB: ${VSPHERE_MEM_MIB}
+          diskGiB: ${VSPHERE_DISK_GIB}
+          template: "${VSPHERE_TEMPLATE}"
+    versions:
+      kubelet: "${KUBERNETES_VERSION}"
+      controlPlane: "${KUBERNETES_VERSION}"

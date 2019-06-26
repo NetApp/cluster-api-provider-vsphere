@@ -1,5 +1,19 @@
 #!/bin/sh
 
+# Copyright 2019 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # this script takes care of everything after bootstrap cluster created, it means
 # bootstrap need be created beforehand.
 
@@ -29,15 +43,8 @@ echo "${TARGET_VM_SSH_PUB}"
 
 for filename in spec/*.template; do
   newfilename="$(echo "$filename" | sed 's/template/yml/g')"
-  rm -f "$newfilename" temp.sh
-  ( echo "cat <<EOF >$newfilename";
-    cat "$filename";
-    echo "EOF";
-  ) >temp.sh
-  chmod +x temp.sh
-  ./temp.sh
+  envsubst < "$filename" > "$newfilename"
 done
-rm temp.sh
 
 # download kubectl binary
 retry=20
@@ -51,7 +58,7 @@ do
       exit 1
    fi
 done
-wget https://storage.googleapis.com/kubernetes-release/release/v1.10.2/bin/linux/amd64/kubectl \
+wget https://storage.googleapis.com/kubernetes-release/release/v1.14.2/bin/linux/amd64/kubectl \
      --no-verbose -O /usr/local/bin/kubectl
 chmod +x /usr/local/bin/kubectl
 
@@ -61,6 +68,7 @@ echo "test ${PROVIDER_COMPONENT_SPEC}"
 /tmp/clusterctl/clusterctl create cluster -e ~/.kube/config -c ./spec/cluster.yml \
     -m ./spec/machines.yml \
     -p ./spec/"${PROVIDER_COMPONENT_SPEC}" \
+    -a ./spec/addons.yml \
     --provider vsphere \
     -v 6 
 

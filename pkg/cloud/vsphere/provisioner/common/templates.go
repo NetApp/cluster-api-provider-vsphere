@@ -912,6 +912,7 @@ const masterDebianStartupScript = `
 {{ define "configure" -}}
 PORT=443
 MACHINE={{ .Machine.ObjectMeta.Name }}
+CLUSTER_NAME={{ .Cluster.ObjectMeta.Name }}
 DATASTORE={{ .Datastore }}
 CONTROL_PLANE_VERSION={{ .Machine.Spec.Versions.ControlPlane }}
 CLUSTER_DNS_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
@@ -1307,7 +1308,38 @@ then
       exit 0
 fi
 
-sleep 120
+until $(kubectl get pod kube-apiserver-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+until $(kubectl get pod kube-controller-manager-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+until $(kubectl get pod kube-scheduler-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+while [[ $(kubectl get pod kube-apiserver-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+while [[ $(kubectl get pod kube-controller-manager-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+while [[ $(kubectl get pod kube-scheduler-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
 
 mkdir setup
 
@@ -1349,7 +1381,7 @@ cat > setup/backend.json << EOF
 }
 EOF
 
-tridentctl install --pv nks-trident-metadata --pvc nks-trident-metadata --volume-name nks-trident-metadata -n trident
+tridentctl install --pv nks-trident-cluster-${CLUSTER_NAME} --pvc nks-trident-cluster-${CLUSTER_NAME} --volume-name nks-trident-cluster-${CLUSTER_NAME} -n trident
 
 cat <<EOF | kubectl create -f -
 apiVersion: storage.k8s.io/v1

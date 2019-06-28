@@ -59,18 +59,26 @@ func init() {
 //**** New extensions
 
 type VsphereMachineSpec struct {
-	Datacenter       string        `json:"datacenter"`
-	Datastore        string        `json:"datastore"`
-	ResourcePool     string        `json:"resourcePool,omitempty"`
-	VMFolder         string        `json:"vmFolder,omitempty"`
-	Networks         []NetworkSpec `json:"networks"`
-	NumCPUs          int32         `json:"numCPUs,omitempty"`
-	MemoryMB         int64         `json:"memoryMB,omitempty"`
-	VMTemplate       string        `json:"template" yaml:"template"`
-	Disks            []DiskSpec    `json:"disks"`
-	Preloaded        bool          `json:"preloaded,omitempty"`
-	VsphereCloudInit bool          `json:"vsphereCloudInit,omitempty"`
-	TrustedCerts     []string      `json:"trustedCerts,omitempty"`
+	Datacenter       string             `json:"datacenter"`
+	Datastore        string             `json:"datastore"`
+	ResourcePool     string             `json:"resourcePool,omitempty"`
+	VMFolder         string             `json:"vmFolder,omitempty"`
+	Networks         []NetworkSpec      `json:"networks"`
+	NumCPUs          int32              `json:"numCPUs,omitempty"`
+	MemoryMB         int64              `json:"memoryMB,omitempty"`
+	VMTemplate       string             `json:"template" yaml:"template"`
+	Disks            []DiskSpec         `json:"disks"`
+	Preloaded        bool               `json:"preloaded,omitempty"`
+	VsphereCloudInit bool               `json:"vsphereCloudInit,omitempty"`
+	TrustedCerts     []string           `json:"trustedCerts,omitempty"`
+	ElementStorage   ElementStorageSpec `json:"elementStorage,omitempty"`
+}
+
+type ElementStorageSpec struct {
+	MVIP     string `json:"mvip,omitempty"`
+	SVIP     string `json:"svip,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type NetworkSpec struct {

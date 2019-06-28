@@ -567,6 +567,10 @@ func (pv *Provisioner) getStartupScript(cluster *clusterv1.Cluster, machine *clu
 				UserNameB64:       base64.StdEncoding.EncodeToString([]byte(username)),
 				PasswordB64:       base64.StdEncoding.EncodeToString([]byte(password)),
 				Datastore:         machineconfig.MachineSpec.Datastore,
+				ElementMVIP:       machineconfig.MachineSpec.ElementStorage.MVIP,
+				ElementSVIP:       machineconfig.MachineSpec.ElementStorage.SVIP,
+				ElementUser:       machineconfig.MachineSpec.ElementStorage.User,
+				ElementPassword:   machineconfig.MachineSpec.ElementStorage.Password,
 			},
 		)
 		if err != nil {

@@ -42,6 +42,10 @@ type TemplateParams struct {
 	Server            string
 	UserNameB64       string
 	PasswordB64       string
+	ElementMVIP       string
+	ElementSVIP       string
+	ElementUser       string
+	ElementPassword   string
 }
 
 // Returns the startup script for the nodes.
@@ -908,6 +912,7 @@ const masterDebianStartupScript = `
 {{ define "configure" -}}
 PORT=443
 MACHINE={{ .Machine.ObjectMeta.Name }}
+CLUSTER_NAME={{ .Cluster.ObjectMeta.Name }}
 DATASTORE={{ .Datastore }}
 CONTROL_PLANE_VERSION={{ .Machine.Spec.Versions.ControlPlane }}
 CLUSTER_DNS_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
@@ -915,6 +920,11 @@ POD_CIDR={{ getSubnet .Cluster.Spec.ClusterNetwork.Pods }}
 SERVICE_CIDR={{ getSubnet .Cluster.Spec.ClusterNetwork.Services }}
 NODE_LABEL_OPTION={{ if .Machine.Spec.Labels }}--node-labels={{ labelMap .Machine.Spec.Labels }}{{ end }}
 NODE_TAINTS_OPTION={{ if .Machine.Spec.Taints }}--register-with-taints={{ taintMap .Machine.Spec.Taints }}{{ end }}
+ELEMENT_MVIP={{ .ElementMVIP }}
+ELEMENT_SVIP={{ .ElementSVIP }}
+ELEMENT_USER={{ .ElementUser }}
+ELEMENT_PASSWORD={{ .ElementPassword }}
+
 
 # Disable swap otherwise kubelet won't run
 swapoff -a
@@ -1271,6 +1281,8 @@ EOF
 
 kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f /tmp/vccm.yaml
 
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
 # create default storage class
 cat > /tmp/default_storage_class.yaml << EOF
 apiVersion: storage.k8s.io/v1
@@ -1287,6 +1299,121 @@ parameters:
 EOF
 
 kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f /tmp/default_storage_class.yaml
+
+# create solidfire storage classes
+
+if [ -z "$ELEMENT_MVIP" ]
+then
+      echo "Skipping element setup"
+      exit 0
+fi
+
+until $(kubectl get pod kube-apiserver-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+until $(kubectl get pod kube-controller-manager-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+until $(kubectl get pod kube-scheduler-${MACHINE} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+
+while [[ $(kubectl get pod kube-apiserver-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+while [[ $(kubectl get pod kube-controller-manager-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+while [[ $(kubectl get pod kube-scheduler-${MACHINE} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+mkdir setup
+
+cat > setup/backend.json << EOF
+{
+  "version": 1,
+  "storageDriverName": "solidfire-san",
+  "Endpoint": "https://${ELEMENT_USER}:${ELEMENT_PASSWORD}@${ELEMENT_MVIP}/json-rpc/8.0",
+  "SVIP": "${ELEMENT_SVIP}:3260",
+  "TenantName": "nks-trident",
+  "InitiatorIFace": "default",
+  "UseCHAP": true,
+  "Types": [
+      {
+          "Type": "Bronze",
+          "Qos": {
+              "minIOPS": 1000,
+              "maxIOPS": 2000,
+              "burstIOPS": 4000
+          }
+      },
+      {
+          "Type": "Silver",
+          "Qos": {
+              "minIOPS": 4000,
+              "maxIOPS": 25000,
+              "burstIOPS": 40000
+          }
+      },
+      {
+          "Type": "Gold",
+          "Qos": {
+              "minIOPS": 6000,
+              "maxIOPS": 50000,
+              "burstIOPS": 65000
+          }
+      }
+  ]
+}
+EOF
+
+tridentctl install --pv nks-trident-cluster-${CLUSTER_NAME} --pvc nks-trident-cluster-${CLUSTER_NAME} --volume-name nks-trident-cluster-${CLUSTER_NAME} -n trident
+
+cat <<EOF | kubectl create -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-gold
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  IOPS: "1500"
+  fsType: "ext4"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-silver
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  IOPS: "1500"
+  fsType: "ext4"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-bronze
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  IOPS: "1500"
+  fsType: "ext4"
+EOF
 
 {{- end }}{{/* end configure */}}
 `

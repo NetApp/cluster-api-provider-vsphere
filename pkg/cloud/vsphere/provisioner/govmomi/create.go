@@ -27,6 +27,13 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/util"
 )
 
+const (
+	ClusterIdLabel     = "hci.nks.netapp.com/cluster"
+	WorkspaceIdLabel   = "hci.nks.netapp.com/workspace"
+	ClusterRoleLabel   = "hci.nks.netapp.com/role"
+	ServiceClusterRole = "service-cluster"
+)
+
 func (pv *Provisioner) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	if cluster == nil {
 		return errors.New(constants.ClusterIsNullErr)
@@ -193,11 +200,13 @@ func (pv *Provisioner) cloneVirtualMachine(s *SessionContext, cluster *clusterv1
 	if machineConfig.MachineSpec.MemoryMB > 0 {
 		spec.Config.MemoryMB = machineConfig.MachineSpec.MemoryMB
 	}
-	spec.Config.Annotation = fmt.Sprintf("Virtual Machine is part of the cluster %s managed by cluster-api", cluster.Name)
 
-	//hci.nks.netapp.com/cluster -> 999
-	//hci.nks.netapp.com/workspace -> 999
-	// Add custom fields here?
+	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
+	if isServiceCluster {
+		spec.Config.Annotation = fmt.Sprintf("VM is part of NKS service cluster %s with cluster ID %s in workspace %s", cluster.Name, clusterID, workspaceID)
+	} else {
+		spec.Config.Annotation = fmt.Sprintf("VM is part of NKS user cluster %s with cluster ID %s in workspace %s", cluster.Name, clusterID, workspaceID)
+	}
 
 	spec.Location.DiskMoveType = string(types.VirtualMachineRelocateDiskMoveOptionsMoveAllDiskBackingsAndConsolidate)
 	var src *object.VirtualMachine
@@ -374,6 +383,27 @@ func Properties(vm *object.VirtualMachine) (*mo.VirtualMachine, error) {
 		return nil, err
 	}
 	return &props, nil
+}
+
+func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
+
+	var workspaceID = ""
+	var clusterID = ""
+	var isServiceCluster bool
+
+	if val, ok := cluster.Labels[WorkspaceIdLabel]; ok {
+		workspaceID = val
+	}
+	if val, ok := cluster.Labels[ClusterIdLabel]; ok {
+		clusterID = val
+	}
+	if val, ok := cluster.Labels[ClusterRoleLabel]; ok {
+		if val == ServiceClusterRole {
+			isServiceCluster = true
+		}
+	}
+
+	return clusterID, workspaceID, isServiceCluster
 }
 
 func (vc *Provisioner) updateVMReference(machine *clusterv1.Machine, vmref string) (*clusterv1.Machine, error) {

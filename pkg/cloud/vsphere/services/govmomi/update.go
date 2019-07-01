@@ -129,6 +129,11 @@ func reconcileNetwork(ctx *context.MachineContext, vm *object.VirtualMachine) er
 	}
 	if powerState == types.VirtualMachinePowerStatePoweredOn {
 		for _, netStatus := range ctx.MachineStatus.Network {
+			// NetApp: Only care about VM_Network
+			// TODO: NetApp - ISCSI-B not getting an IP - but we don't need it? Figure this out.
+			if netStatus.NetworkName != "VM_Network" {
+				continue
+			}
 			if len(netStatus.IPAddrs) == 0 {
 				ctx.Logger.V(6).Info("reenqueue to wait on IP addresses")
 				return &clustererror.RequeueAfterError{RequeueAfter: constants.DefaultRequeue}

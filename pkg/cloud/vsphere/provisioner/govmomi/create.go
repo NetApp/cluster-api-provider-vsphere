@@ -194,6 +194,11 @@ func (pv *Provisioner) cloneVirtualMachine(s *SessionContext, cluster *clusterv1
 		spec.Config.MemoryMB = machineConfig.MachineSpec.MemoryMB
 	}
 	spec.Config.Annotation = fmt.Sprintf("Virtual Machine is part of the cluster %s managed by cluster-api", cluster.Name)
+
+	//hci.nks.netapp.com/cluster -> 999
+	//hci.nks.netapp.com/workspace -> 999
+	// Add custom fields here?
+
 	spec.Location.DiskMoveType = string(types.VirtualMachineRelocateDiskMoveOptionsMoveAllDiskBackingsAndConsolidate)
 	var src *object.VirtualMachine
 	if vsphereutils.IsValidUUID(machineConfig.MachineSpec.VMTemplate) {

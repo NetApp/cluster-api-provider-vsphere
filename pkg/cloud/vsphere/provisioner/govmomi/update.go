@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/vapi/tags"
 	"time"
 
@@ -53,7 +52,7 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	}
 
 	// NetApp
-	pv.updateVMTags(updatectx, s.session, vmmo, cluster)
+	pv.updateVMTags(updatectx, vmmo, cluster)
 
 	if vmmo.Runtime.PowerState != types.VirtualMachinePowerStatePoweredOn {
 		klog.Warningf("Machine %s is not running, rather it is in %s state", vmmo.Name, vmmo.Runtime.PowerState)
@@ -105,7 +104,7 @@ func (pv *Provisioner) updateIP(cluster *clusterv1.Cluster, machine *clusterv1.M
 }
 
 // NetApp
-func (pv *Provisioner) updateVMTags(ctx context.Context, session *govmomi.Client, vmMoRef mo.VirtualMachine, cluster *clusterv1.Cluster) {
+func (pv *Provisioner) updateVMTags(ctx context.Context, vmMoRef mo.VirtualMachine, cluster *clusterv1.Cluster) {
 
 	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
 
@@ -115,9 +114,9 @@ func (pv *Provisioner) updateVMTags(ctx context.Context, session *govmomi.Client
 	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
 	clusterInfoTagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, cluster.Name)
 
-	restClient, err := pv.getRestClientForSession(session, cluster)
+	restClient, err := pv.restClientFromProviderConfig(cluster)
 	if err != nil {
-		klog.V(4).Infof("could not get rest client for session - err: %s", err.Error())
+		klog.V(4).Infof("could not get rest client from provider config - err: %s", err.Error())
 		return
 	}
 	tagManager := tags.NewManager(restClient)

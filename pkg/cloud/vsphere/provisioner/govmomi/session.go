@@ -6,6 +6,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/vapi/rest"
+	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
 	"net/url"
 	vsphereutils "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/utils"
@@ -59,19 +60,35 @@ func (pv *Provisioner) sessionFromProviderConfig(cluster *clusterv1.Cluster, mac
 }
 
 // NetApp
-func (pv *Provisioner) getRestClientForSession(session *govmomi.Client, cluster *clusterv1.Cluster) (*rest.Client, error) {
+func (pv *Provisioner) restClientFromProviderConfig(cluster *clusterv1.Cluster) (*rest.Client, error) {
+
+	ctx := context.Background()
+
+	vsphereConfig, err := vsphereutils.GetClusterProviderSpec(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	soapURL, err := soap.ParseURL(vsphereConfig.VsphereServer)
+	if soapURL == nil || err != nil {
+		return nil, fmt.Errorf("error parsing vSphere URL %s : [%s]", soapURL, err)
+	}
 
 	username, password, err := pv.GetVsphereCredentials(cluster)
 	if err != nil {
 		return nil, err
 	}
 
-	URL := session.URL()
-	URL.User = url.UserPassword(username, password)
-
-	restClient := rest.NewClient(session.Client)
-	if err := restClient.Login(context.TODO(), URL.User); err != nil {
+	soapClient := soap.NewClient(soapURL, true)
+	vimClient, err := vim25.NewClient(ctx, soapClient)
+	if err != nil {
 		return nil, err
 	}
+
+	restClient := rest.NewClient(vimClient)
+	if err := restClient.Login(ctx, url.UserPassword(username, password)); err != nil {
+		return nil, err
+	}
+
 	return restClient, nil
 }

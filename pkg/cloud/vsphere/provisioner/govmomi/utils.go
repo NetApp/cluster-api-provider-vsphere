@@ -234,3 +234,25 @@ func (pv *Provisioner) GetVsphereCredentials(cluster *clusterv1.Cluster) (string
 	return vsphereConfig.VsphereUser, vsphereConfig.VspherePassword, nil
 
 }
+
+// NetApp
+func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
+
+	var workspaceID = ""
+	var clusterID = ""
+	var isServiceCluster bool
+
+	if val, ok := cluster.Labels[WorkspaceIdLabel]; ok {
+		workspaceID = val
+	}
+	if val, ok := cluster.Labels[ClusterIdLabel]; ok {
+		clusterID = val
+	}
+	if val, ok := cluster.Labels[ClusterRoleLabel]; ok {
+		if val == ServiceClusterRole {
+			isServiceCluster = true
+		}
+	}
+
+	return clusterID, workspaceID, isServiceCluster
+}

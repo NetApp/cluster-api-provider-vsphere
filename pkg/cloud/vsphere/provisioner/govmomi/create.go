@@ -385,27 +385,6 @@ func Properties(vm *object.VirtualMachine) (*mo.VirtualMachine, error) {
 	return &props, nil
 }
 
-func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
-
-	var workspaceID = ""
-	var clusterID = ""
-	var isServiceCluster bool
-
-	if val, ok := cluster.Labels[WorkspaceIdLabel]; ok {
-		workspaceID = val
-	}
-	if val, ok := cluster.Labels[ClusterIdLabel]; ok {
-		clusterID = val
-	}
-	if val, ok := cluster.Labels[ClusterRoleLabel]; ok {
-		if val == ServiceClusterRole {
-			isServiceCluster = true
-		}
-	}
-
-	return clusterID, workspaceID, isServiceCluster
-}
-
 func (vc *Provisioner) updateVMReference(machine *clusterv1.Machine, vmref string) (*clusterv1.Machine, error) {
 	providerSpec, err := vsphereutils.GetMachineProviderSpec(machine.Spec.ProviderSpec)
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/vapi/tags"
 	"time"
 
 	"github.com/vmware/govmomi/object"
@@ -49,6 +51,10 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	if err != nil {
 		return nil
 	}
+
+	// NetApp
+	pv.updateVMTags(updatectx, s.session, vmmo, cluster)
+
 	if vmmo.Runtime.PowerState != types.VirtualMachinePowerStatePoweredOn {
 		klog.Warningf("Machine %s is not running, rather it is in %s state", vmmo.Name, vmmo.Runtime.PowerState)
 		return fmt.Errorf("Machine %s is not running, rather it is in %s state", vmmo.Name, vmmo.Runtime.PowerState)
@@ -96,4 +102,47 @@ func (pv *Provisioner) updateIP(cluster *clusterv1.Cluster, machine *clusterv1.M
 	ncluster.Status.ProviderStatus = &runtime.RawExtension{Raw: out}
 	_, err = pv.clusterV1alpha1.Clusters(ncluster.Namespace).UpdateStatus(ncluster)
 	return err
+}
+
+// NetApp
+func (pv *Provisioner) updateVMTags(ctx context.Context, session *govmomi.Client, vmMoRef mo.VirtualMachine, cluster *clusterv1.Cluster) {
+
+	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
+
+	const serviceClusterTagName = "nks.service.cluster"
+	const clusterInfoTagNameTemplate = "nks.workspaceid.%s.clusterid.%s.clustername.%s"
+
+	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
+	clusterInfoTagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, cluster.Name)
+
+	restClient, err := pv.getRestClientForSession(session, cluster)
+	if err != nil {
+		klog.V(4).Infof("could not get rest client for session - err: %s", err.Error())
+		return
+	}
+	tagManager := tags.NewManager(restClient)
+
+	clusterInfoTag, err := tagManager.GetTag(ctx, clusterInfoTagName)
+	if err == nil {
+		klog.V(4).Infof("attaching tag %s to VM %s", clusterInfoTag.Name, vmMoRef.Name)
+		err = tagManager.AttachTag(ctx, clusterInfoTag.ID, vmMoRef)
+		if err != nil {
+			klog.V(4).Infof("could not attach tag %s to VM %s - err: %s", clusterInfoTag.Name, vmMoRef.Name, err.Error())
+		}
+	} else {
+		klog.V(4).Infof("could not get tag %s - err: %s", clusterInfoTagName, err.Error())
+	}
+
+	if isServiceCluster {
+		serviceClusterTag, err := tagManager.GetTag(ctx, serviceClusterTagName)
+		if err == nil {
+			klog.V(4).Infof("attaching tag %s to VM %s", serviceClusterTag.Name, vmMoRef.Name)
+			err = tagManager.AttachTag(ctx, serviceClusterTag.ID, vmMoRef)
+			if err != nil {
+				klog.V(4).Infof("could not attach tag %s to VM %s - err: %s", serviceClusterTag.Name, vmMoRef.Name, err.Error())
+			}
+		} else {
+			klog.V(4).Infof("could not get tag %s - err: %s", serviceClusterTagName, err.Error())
+		}
+	}
 }

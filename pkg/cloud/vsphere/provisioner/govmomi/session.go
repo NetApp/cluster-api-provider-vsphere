@@ -3,12 +3,11 @@ package govmomi
 import (
 	"context"
 	"fmt"
-	"net/url"
-
 	"github.com/vmware/govmomi"
-
 	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/vapi/rest"
 	"github.com/vmware/govmomi/vim25/soap"
+	"net/url"
 	vsphereutils "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/utils"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
@@ -57,4 +56,22 @@ func (pv *Provisioner) sessionFromProviderConfig(cluster *clusterv1.Cluster, mac
 	sc.finder = finder
 	pv.sessioncache[vsphereConfig.VsphereServer+username] = sc
 	return &sc, nil
+}
+
+// NetApp
+func (pv *Provisioner) getRestClientForSession(session *govmomi.Client, cluster *clusterv1.Cluster) (*rest.Client, error) {
+
+	username, password, err := pv.GetVsphereCredentials(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	URL := session.URL()
+	URL.User = url.UserPassword(username, password)
+
+	restClient := rest.NewClient(session.Client)
+	if err := restClient.Login(context.TODO(), URL.User); err != nil {
+		return nil, err
+	}
+	return restClient, nil
 }

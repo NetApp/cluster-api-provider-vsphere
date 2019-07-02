@@ -238,6 +238,11 @@ func (pv *Provisioner) GetVsphereCredentials(cluster *clusterv1.Cluster) (string
 // NetApp
 func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
 
+	const ClusterIdLabel     = "hci.nks.netapp.com/cluster"
+	const WorkspaceIdLabel   = "hci.nks.netapp.com/workspace"
+	const ClusterRoleLabel   = "hci.nks.netapp.com/role"
+	const ServiceClusterRole = "service-cluster"
+
 	var workspaceID = ""
 	var clusterID = ""
 	var isServiceCluster bool

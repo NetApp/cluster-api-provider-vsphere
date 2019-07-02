@@ -27,13 +27,6 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/util"
 )
 
-const (
-	ClusterIdLabel     = "hci.nks.netapp.com/cluster"
-	WorkspaceIdLabel   = "hci.nks.netapp.com/workspace"
-	ClusterRoleLabel   = "hci.nks.netapp.com/role"
-	ServiceClusterRole = "service-cluster"
-)
-
 func (pv *Provisioner) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	if cluster == nil {
 		return errors.New(constants.ClusterIsNullErr)

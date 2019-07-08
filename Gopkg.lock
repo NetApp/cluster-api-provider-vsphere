@@ -572,7 +572,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1796e0465930bae6ba7ac885719496f184f6cd1fd5a7356542aeeeea24ba0403"
+  digest = "1:22a138cfa8b88c9a91eecb5ad05fc19ca0265208e9d98a58bfff259100937964"
   name = "github.com/vmware/govmomi"
   packages = [
     ".",
@@ -590,6 +590,9 @@
     "toolbox",
     "toolbox/hgfs",
     "toolbox/vix",
+    "vapi/internal",
+    "vapi/rest",
+    "vapi/tags",
     "vim25",
     "vim25/debug",
     "vim25/methods",
@@ -1294,6 +1297,7 @@
     "github.com/google/uuid",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/pkg/errors",
     "github.com/spf13/pflag",
     "github.com/vmware/govmomi",
     "github.com/vmware/govmomi/find",
@@ -1302,6 +1306,9 @@
     "github.com/vmware/govmomi/simulator",
     "github.com/vmware/govmomi/toolbox",
     "github.com/vmware/govmomi/toolbox/vix",
+    "github.com/vmware/govmomi/vapi/rest",
+    "github.com/vmware/govmomi/vapi/tags",
+    "github.com/vmware/govmomi/vim25",
     "github.com/vmware/govmomi/vim25/mo",
     "github.com/vmware/govmomi/vim25/soap",
     "github.com/vmware/govmomi/vim25/types",

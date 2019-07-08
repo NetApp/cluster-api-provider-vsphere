@@ -193,7 +193,12 @@ func (pv *Provisioner) cloneVirtualMachine(s *SessionContext, cluster *clusterv1
 	if machineConfig.MachineSpec.MemoryMB > 0 {
 		spec.Config.MemoryMB = machineConfig.MachineSpec.MemoryMB
 	}
-	spec.Config.Annotation = fmt.Sprintf("Virtual Machine is part of the cluster %s managed by cluster-api", cluster.Name)
+
+	// NetApp
+	// TODO: At this point we do not know if it is a service cluster - need better communication of that
+	clusterID, workspaceID, _ := getNKSClusterInfo(cluster)
+	spec.Config.Annotation = fmt.Sprintf("VM is part of NKS kubernetes cluster %s with cluster ID %s in workspace with ID %s", cluster.Name, clusterID, workspaceID)
+
 	spec.Location.DiskMoveType = string(types.VirtualMachineRelocateDiskMoveOptionsMoveAllDiskBackingsAndConsolidate)
 	var src *object.VirtualMachine
 	if vsphereutils.IsValidUUID(machineConfig.MachineSpec.VMTemplate) {

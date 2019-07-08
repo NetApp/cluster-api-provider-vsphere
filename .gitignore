@@ -17,3 +17,7 @@ config/default/vsphere_tmp
 
 # tmp files
 *.tmp
+
+# IDEs
+.vscode/*
+.idea/*

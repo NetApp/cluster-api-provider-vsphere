@@ -3,6 +3,7 @@ package govmomi
 import (
 	"context"
 	"errors"
+	"github.com/vmware/govmomi/vapi/tags"
 
 	"github.com/vmware/govmomi/object"
 
@@ -61,6 +62,10 @@ func (pv *Provisioner) Delete(ctx context.Context, cluster *clusterv1.Cluster, m
 		if taskinfo.State == types.TaskInfoStateSuccess {
 			klog.Infof("Virtual Machine %v deleted successfully", vm.Name)
 			pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Killed", "Machine %v deletion complete", machine.Name)
+
+			// NetApp
+			pv.deleteVMTags(deletectx, cluster)
+
 			return nil
 		}
 		pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Killed", "Machine %v deletion complete", machine.Name)
@@ -68,4 +73,31 @@ func (pv *Provisioner) Delete(ctx context.Context, cluster *clusterv1.Cluster, m
 		return errors.New("VM Deletion failed")
 	}
 	return nil
+}
+
+// NetApp
+func (pv *Provisioner) deleteVMTags(ctx context.Context, cluster *clusterv1.Cluster) {
+
+	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
+
+	restClient, err := pv.restClientFromProviderConfig(cluster)
+	if err != nil {
+		klog.V(4).Infof("could not get rest client from provider config - err: %s", err.Error())
+		return
+	}
+	tagManager := tags.NewManager(restClient)
+
+	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
+
+	klog.V(4).Infof("cleaning up cluster information tag and category for cluster %s", cluster.Name)
+	if err := vsphereutils.DeleteClusterInfoTagAndCategoryIfNoSubjects(ctx, tagManager, workspaceID, clusterID, cluster.Name); err != nil {
+		klog.V(4).Infof("could not clean up cluster information tag and category for cluster %s - err: %s", cluster.Name, err.Error())
+	}
+
+	if isServiceCluster {
+		klog.V(4).Infof("cleaning up service cluster tag and category for cluster %s", cluster.Name)
+		if err := vsphereutils.DeleteServiceClusterTagAndCategoryIfNoSubjects(ctx, tagManager); err != nil {
+			klog.V(4).Infof("could not clean up service cluster tag and category for cluster %s - err: %s", cluster.Name, err.Error())
+		}
+	}
 }

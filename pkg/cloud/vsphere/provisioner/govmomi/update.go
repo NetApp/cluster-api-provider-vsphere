@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vmware/govmomi/vapi/tags"
 	"time"
 
 	"github.com/vmware/govmomi/object"
@@ -49,6 +50,10 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	if err != nil {
 		return nil
 	}
+
+	// NetApp
+	pv.updateVMTags(updatectx, vmmo, cluster)
+
 	if vmmo.Runtime.PowerState != types.VirtualMachinePowerStatePoweredOn {
 		klog.Warningf("Machine %s is not running, rather it is in %s state", vmmo.Name, vmmo.Runtime.PowerState)
 		return fmt.Errorf("Machine %s is not running, rather it is in %s state", vmmo.Name, vmmo.Runtime.PowerState)
@@ -96,4 +101,31 @@ func (pv *Provisioner) updateIP(cluster *clusterv1.Cluster, machine *clusterv1.M
 	ncluster.Status.ProviderStatus = &runtime.RawExtension{Raw: out}
 	_, err = pv.clusterV1alpha1.Clusters(ncluster.Namespace).UpdateStatus(ncluster)
 	return err
+}
+
+// NetApp
+func (pv *Provisioner) updateVMTags(ctx context.Context, vmMoRef mo.VirtualMachine, cluster *clusterv1.Cluster) {
+
+	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
+
+	restClient, err := pv.restClientFromProviderConfig(cluster)
+	if err != nil {
+		klog.V(4).Infof("could not get rest client from provider config - err: %s", err.Error())
+		return
+	}
+	tagManager := tags.NewManager(restClient)
+
+	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
+
+	klog.V(4).Infof("tagging VM %s with cluster information", vmMoRef.Name)
+	if err := vsphereutils.TagWithClusterInfo(ctx, tagManager, vmMoRef.Reference(), workspaceID, clusterID, cluster.Name); err != nil {
+		klog.V(4).Infof("could not tag VM %s with cluster information - err: %s", vmMoRef.Name, err.Error())
+	}
+
+	if isServiceCluster {
+		klog.V(4).Infof("tagging VM %s as service cluster machine", vmMoRef.Name)
+		if err := vsphereutils.TagAsServiceCluster(ctx, tagManager, vmMoRef.Reference()); err != nil {
+			klog.V(4).Infof("could not tag VM %s as service cluster machine - err: %s", vmMoRef.Name, err.Error())
+		}
+	}
 }

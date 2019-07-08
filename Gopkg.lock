@@ -1297,6 +1297,7 @@
     "github.com/google/uuid",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/pkg/errors",
     "github.com/spf13/pflag",
     "github.com/vmware/govmomi",
     "github.com/vmware/govmomi/find",

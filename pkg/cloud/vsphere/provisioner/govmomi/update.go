@@ -108,12 +108,6 @@ func (pv *Provisioner) updateVMTags(ctx context.Context, vmMoRef mo.VirtualMachi
 
 	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
 
-	const serviceClusterTagName = "nks.service.cluster"
-	const clusterInfoTagNameTemplate = "nks.workspaceid.%s.clusterid.%s.clustername.%s"
-
-	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
-	clusterInfoTagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, cluster.Name)
-
 	restClient, err := pv.restClientFromProviderConfig(cluster)
 	if err != nil {
 		klog.V(4).Infof("could not get rest client from provider config - err: %s", err.Error())
@@ -121,27 +115,17 @@ func (pv *Provisioner) updateVMTags(ctx context.Context, vmMoRef mo.VirtualMachi
 	}
 	tagManager := tags.NewManager(restClient)
 
-	clusterInfoTag, err := tagManager.GetTag(ctx, clusterInfoTagName)
-	if err == nil {
-		klog.V(4).Infof("attaching tag %s to VM %s", clusterInfoTag.Name, vmMoRef.Name)
-		err = tagManager.AttachTag(ctx, clusterInfoTag.ID, vmMoRef)
-		if err != nil {
-			klog.V(4).Infof("could not attach tag %s to VM %s - err: %s", clusterInfoTag.Name, vmMoRef.Name, err.Error())
-		}
-	} else {
-		klog.V(4).Infof("could not get tag %s - err: %s", clusterInfoTagName, err.Error())
+	clusterID, workspaceID, isServiceCluster := getNKSClusterInfo(cluster)
+
+	klog.V(4).Infof("tagging VM %s with cluster information", vmMoRef.Name)
+	if err := vsphereutils.TagWithClusterInfo(ctx, tagManager, vmMoRef.Reference(), workspaceID, clusterID, cluster.Name); err != nil {
+		klog.V(4).Infof("could not tag VM %s with cluster information - err: %s", vmMoRef.Name, err.Error())
 	}
 
 	if isServiceCluster {
-		serviceClusterTag, err := tagManager.GetTag(ctx, serviceClusterTagName)
-		if err == nil {
-			klog.V(4).Infof("attaching tag %s to VM %s", serviceClusterTag.Name, vmMoRef.Name)
-			err = tagManager.AttachTag(ctx, serviceClusterTag.ID, vmMoRef)
-			if err != nil {
-				klog.V(4).Infof("could not attach tag %s to VM %s - err: %s", serviceClusterTag.Name, vmMoRef.Name, err.Error())
-			}
-		} else {
-			klog.V(4).Infof("could not get tag %s - err: %s", serviceClusterTagName, err.Error())
+		klog.V(4).Infof("tagging VM %s as service cluster machine", vmMoRef.Name)
+		if err := vsphereutils.TagAsServiceCluster(ctx, tagManager, vmMoRef.Reference()); err != nil {
+			klog.V(4).Infof("could not tag VM %s as service cluster machine - err: %s", vmMoRef.Name, err.Error())
 		}
 	}
 }

@@ -146,7 +146,12 @@ func getOrCreateNKSTagCategory(ctx context.Context, tm *tags.Manager) (*tags.Cat
 // NetApp
 func deleteNKSTagIfNoSubjects(ctx context.Context, tm *tags.Manager, tag *tags.Tag) error {
 
-	if len(tag.UsedBy) == 0 {
+	attachedObjects, err := tm.ListAttachedObjects(ctx, tag.ID)
+	if err != nil {
+		return errors.Wrapf(err, "could not list attached objects for tag with name %s", tag.Name)
+	}
+
+	if len(attachedObjects) == 0 {
 
 		klog.V(4).Infof("deleting tag %s", tag.Name)
 		err := tm.DeleteTag(ctx, tag)
@@ -167,7 +172,7 @@ func deleteNKSTagIfNoSubjects(ctx context.Context, tm *tags.Manager, tag *tags.T
 		return nil
 	}
 
-	klog.V(4).Infof("will not delete tag with name %s - still used by %d objects", tag.Name, len(tag.UsedBy))
+	klog.V(4).Infof("will not delete tag with name %s - still used by %d objects", tag.Name, len(attachedObjects))
 	return nil
 }
 

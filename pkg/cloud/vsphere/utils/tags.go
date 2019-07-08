@@ -35,6 +35,21 @@ func TagWithClusterInfo(ctx context.Context, tm *tags.Manager, moref types.Manag
 }
 
 // NetApp
+// DeleteClusterInfoTagAndCategoryIfNoSubjects deletes the cluster info tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
+// It also deletes the tag category if there are no tags left in the category
+func DeleteClusterInfoTagAndCategoryIfNoSubjects(ctx context.Context, tm *tags.Manager, workspaceID string, clusterID string, clusterName string) error {
+
+	tagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, clusterName)
+
+	tag, err := tm.GetTag(ctx, tagName)
+	if err != nil {
+		return errors.Wrapf(err, "could not get tag with name %s", tagName)
+	}
+
+	return deleteNKSTagIfNoSubjects(ctx, tm, tag)
+}
+
+// NetApp
 func TagAsServiceCluster(ctx context.Context, tm *tags.Manager, moref types.ManagedObjectReference) error {
 
 	tag, err := getOrCreateNKSTag(ctx, tm, serviceClusterTagName)
@@ -48,6 +63,19 @@ func TagAsServiceCluster(ctx context.Context, tm *tags.Manager, moref types.Mana
 	}
 
 	return nil
+}
+
+// NetApp
+// DeleteServiceClusterTagAndCategoryIfNoSubjects deletes the service cluster tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
+// It also deletes the tag category if there are no tags left in the category
+func DeleteServiceClusterTagAndCategoryIfNoSubjects(ctx context.Context, tm *tags.Manager) error {
+
+	tag, err := tm.GetTag(ctx, serviceClusterTagName)
+	if err != nil {
+		return errors.Wrapf(err, "could not get tag with name %s", serviceClusterTagName)
+	}
+
+	return deleteNKSTagIfNoSubjects(ctx, tm, tag)
 }
 
 // NetApp
@@ -113,4 +141,53 @@ func getOrCreateNKSTagCategory(ctx context.Context, tm *tags.Manager) (*tags.Cat
 	}
 
 	return category, nil
+}
+
+// NetApp
+func deleteNKSTagIfNoSubjects(ctx context.Context, tm *tags.Manager, tag *tags.Tag) error {
+
+	if len(tag.UsedBy) == 0 {
+
+		klog.V(4).Infof("deleting tag %s", tag.Name)
+		err := tm.DeleteTag(ctx, tag)
+		if err != nil {
+			return errors.Wrapf(err, "could not delete tag with name %s")
+		}
+
+		category, err := tm.GetCategory(ctx, tag.CategoryID)
+		if err != nil {
+			return errors.Wrapf(err, "could not get category with ID %s", tag.CategoryID)
+		}
+
+		err = deleteNKSTagCategoryIfNoSubjects(ctx, tm, category)
+		if err != nil {
+			return errors.Wrapf(err, "could not delete category for tag %s with name %s", tag.Name, category.Name)
+		}
+
+		return nil
+	}
+
+	klog.V(4).Infof("will not delete tag with name %s - still used by %d objects", tag.Name, len(tag.UsedBy))
+	return nil
+}
+
+// NetApp
+func deleteNKSTagCategoryIfNoSubjects(ctx context.Context, tm *tags.Manager, category *tags.Category) error {
+
+	tagsInCategory, err := tm.GetTagsForCategory(ctx, category.Name)
+	if err != nil {
+		return errors.Wrapf(err, "could not get tags for category with name %s", category.Name)
+	}
+
+	if len(tagsInCategory) == 0 {
+		klog.V(4).Infof("deleting category %s", category.Name)
+		err := tm.DeleteCategory(ctx, category)
+		if err != nil {
+			return errors.Wrapf(err, "could not delete category with name %s", category.Name)
+		}
+		return nil
+	}
+
+	klog.V(4).Infof("will not delete tag category with name %s - still used by %d tags", category.Name, len(tagsInCategory))
+	return nil
 }

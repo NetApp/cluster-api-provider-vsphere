@@ -114,6 +114,13 @@ write_files:
     content: |
       {{.CloudConfig | Base64Encode}}
 
+-   path: /tmp/netapp-boot.sh
+    encoding: "base64"
+    owner: root:root
+    permissions: '0755'
+    content: |
+      {{.NetAppBootScript | Base64Encode}}
+
 -   path: /tmp/kubeadm.yaml
     owner: root:root
     permissions: '0640'
@@ -122,9 +129,12 @@ write_files:
 {{.ClusterConfiguration | Indent 6}}
       ---
 {{.InitConfiguration | Indent 6}}
-kubeadm:
-  operation: init
-  config: /tmp/kubeadm.yaml
+#kubeadm:
+#  operation: init
+#  config: /tmp/kubeadm.yaml
+
+runcmd:
+  - /tmp/netapp-boot.sh
 
 `
 
@@ -228,6 +238,7 @@ type ControlPlaneInput struct {
 	CloudConfig          string
 	ClusterConfiguration string
 	InitConfiguration    string
+	NetAppBootScript     string
 }
 
 // ContolPlaneJoinInput defines context to generate controlplane instance user data for controlplane node join.

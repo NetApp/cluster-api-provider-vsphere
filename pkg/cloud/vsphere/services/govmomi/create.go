@@ -70,7 +70,7 @@ func Create(ctx *context.MachineContext, bootstrapToken string) error {
 		return errors.Wrapf(err, "error generating user data for %q", ctx)
 	}
 
-	if ctx.Session.IsVC() {
+	if ctx.Session.IsVC() { // Debug here
 		return vcenter.Clone(ctx, userData)
 	}
 	return esxi.Clone(ctx, userData)
@@ -227,6 +227,11 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 				return nil, err
 			}
 
+			netappBootScript, err := userdata.NewNetAppBootScript()
+			if err != nil {
+				return nil, err
+			}
+
 			userData, err := userdata.NewControlPlane(&userdata.ControlPlaneInput{
 				SSHAuthorizedKeys:    ctx.ClusterConfig.SSHAuthorizedKeys,
 				CACert:               string(ctx.ClusterConfig.CAKeyPair.Cert),
@@ -240,6 +245,7 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 				CloudConfig:          cloudConfig,
 				ClusterConfiguration: clusterConfigYAML,
 				InitConfiguration:    initConfigYAML,
+				NetAppBootScript:     netappBootScript,
 			})
 			if err != nil {
 				return nil, err

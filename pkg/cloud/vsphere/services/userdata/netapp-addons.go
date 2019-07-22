@@ -25,7 +25,7 @@ kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f netapp-addons/calico.ya
 
 # Default storage class
 cat > netapp-addons/default-storage-class.yaml << EOF
-{{.DefaultStorageClass.yaml}}
+{{.DefaultStorageClassYAML}}
 EOF
 kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f netapp-addons/default-storage-class.yaml
 
@@ -796,7 +796,16 @@ metadata:
 `
 )
 
-func NewNetAppBootScript() (string, error) {
+type NetAppBootScriptInput struct {
+	Datastore string
+}
+
+func NewNetAppBootScript(input *NetAppBootScriptInput) (string, error) {
+
+	defaultStorageClassYAML, err := generate("DefaultStorageClass", storageClassYAMLTemplate, input)
+	if err != nil {
+		return "", err
+	}
 
 	type ScriptValues struct {
 		CalicoYAML              string
@@ -805,7 +814,7 @@ func NewNetAppBootScript() (string, error) {
 
 	values := ScriptValues{
 		CalicoYAML:              calicoYAML,
-		DefaultStorageClassYAML: storageClassYAMLTemplate,
+		DefaultStorageClassYAML: defaultStorageClassYAML,
 	}
 
 	return generate("NetAppBootScript", netappBootScript, values)

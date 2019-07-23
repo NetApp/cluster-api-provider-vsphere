@@ -119,7 +119,7 @@ write_files:
     owner: root:root
     permissions: '0755'
     content: |
-      {{.NetAppBootScript | Base64Encode}}
+      {{.BootScript | Base64Encode}}
 
 -   path: /tmp/kubeadm.yaml
     owner: root:root
@@ -129,6 +129,8 @@ write_files:
 {{.ClusterConfiguration | Indent 6}}
       ---
 {{.InitConfiguration | Indent 6}}
+
+# NetApp - using customized boot script via runcmd in favour of kubadm cloud init operation
 #kubeadm:
 #  operation: init
 #  config: /tmp/kubeadm.yaml

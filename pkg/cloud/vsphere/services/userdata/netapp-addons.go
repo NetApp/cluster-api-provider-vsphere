@@ -13,30 +13,28 @@ func NewBootScript(input *BootScriptInput) (string, error) {
 		return "", err
 	}
 
-	type ScriptValues struct {
+	type scriptValues struct {
 		CalicoYAML              string
 		DefaultStorageClassYAML string
 	}
 
-	values := ScriptValues{
+	values := scriptValues{
 		CalicoYAML:              calicoYAML,
 		DefaultStorageClassYAML: defaultStorageClassYAML,
 	}
 
-	return generate("BootScript", netappBootScript, values)
+	return generate("BootScript", bootScript, values)
 }
 
 const (
-	netappBootScript = `#!/bin/bash
+	bootScript = `#!/bin/bash
 
-set -o errexit
+set -e
+set -x
 
-readonly LOG_FILE="addons-log.txt"
-
+readonly LOG_FILE="bootscript-log.txt"
 touch $LOG_FILE
-
 exec 1>>$LOG_FILE
-
 exec 2>>$LOG_FILE
 
 kubeadm init --config /tmp/kubeadm.yaml
@@ -54,9 +52,6 @@ cat > netapp-addons/default-storage-class.yaml << EOF
 {{.DefaultStorageClassYAML}}
 EOF
 kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f netapp-addons/default-storage-class.yaml
-
-# Trident
-
 `
 
 	storageClassYAMLTemplate = `kind: StorageClass

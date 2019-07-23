@@ -238,7 +238,7 @@ type ControlPlaneInput struct {
 	CloudConfig          string
 	ClusterConfiguration string
 	InitConfiguration    string
-	NetAppBootScript     string
+	BootScript           string // NetApp
 }
 
 // ContolPlaneJoinInput defines context to generate controlplane instance user data for controlplane node join.

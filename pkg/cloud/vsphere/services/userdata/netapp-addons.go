@@ -796,11 +796,13 @@ metadata:
 `
 )
 
-type NetAppBootScriptInput struct {
+// NetApp
+type BootScriptInput struct {
 	Datastore string
 }
 
-func NewNetAppBootScript(input *NetAppBootScriptInput) (string, error) {
+// NetApp
+func NewBootScript(input *BootScriptInput) (string, error) {
 
 	defaultStorageClassYAML, err := generate("DefaultStorageClass", storageClassYAMLTemplate, input)
 	if err != nil {
@@ -817,5 +819,5 @@ func NewNetAppBootScript(input *NetAppBootScriptInput) (string, error) {
 		DefaultStorageClassYAML: defaultStorageClassYAML,
 	}
 
-	return generate("NetAppBootScript", netappBootScript, values)
+	return generate("BootScript", netappBootScript, values)
 }

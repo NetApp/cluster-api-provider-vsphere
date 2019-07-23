@@ -228,7 +228,7 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 			}
 
 			// NetApp
-			netappBootScript, err := userdata.NewNetAppBootScript(&userdata.NetAppBootScriptInput{
+			bootScript, err := userdata.NewBootScript(&userdata.BootScriptInput{
 				Datastore: ctx.MachineConfig.Datastore,
 			})
 			if err != nil {
@@ -248,7 +248,7 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 				CloudConfig:          cloudConfig,
 				ClusterConfiguration: clusterConfigYAML,
 				InitConfiguration:    initConfigYAML,
-				NetAppBootScript:     netappBootScript, // NetApp
+				BootScript:           bootScript, // NetApp
 			})
 			if err != nil {
 				return nil, err

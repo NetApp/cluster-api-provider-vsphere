@@ -227,6 +227,14 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 				return nil, err
 			}
 
+			// NetApp
+			bootScript, err := userdata.NewBootScript(&userdata.BootScriptInput{
+				Datastore: ctx.MachineConfig.Datastore,
+			})
+			if err != nil {
+				return nil, err
+			}
+
 			userData, err := userdata.NewControlPlane(&userdata.ControlPlaneInput{
 				SSHAuthorizedKeys:    ctx.ClusterConfig.SSHAuthorizedKeys,
 				CACert:               string(ctx.ClusterConfig.CAKeyPair.Cert),
@@ -240,6 +248,7 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 				CloudConfig:          cloudConfig,
 				ClusterConfiguration: clusterConfigYAML,
 				InitConfiguration:    initConfigYAML,
+				BootScript:           bootScript, // NetApp
 			})
 			if err != nil {
 				return nil, err

@@ -1,5 +1,31 @@
 package userdata
 
+// NetApp
+type BootScriptInput struct {
+	Datastore string
+}
+
+// NetApp
+func NewBootScript(input *BootScriptInput) (string, error) {
+
+	defaultStorageClassYAML, err := generate("DefaultStorageClass", storageClassYAMLTemplate, input)
+	if err != nil {
+		return "", err
+	}
+
+	type ScriptValues struct {
+		CalicoYAML              string
+		DefaultStorageClassYAML string
+	}
+
+	values := ScriptValues{
+		CalicoYAML:              calicoYAML,
+		DefaultStorageClassYAML: defaultStorageClassYAML,
+	}
+
+	return generate("BootScript", netappBootScript, values)
+}
+
 const (
 	netappBootScript = `#!/bin/bash
 
@@ -795,29 +821,3 @@ metadata:
 # Source: calico/templates/configure-canal.yaml
 `
 )
-
-// NetApp
-type BootScriptInput struct {
-	Datastore string
-}
-
-// NetApp
-func NewBootScript(input *BootScriptInput) (string, error) {
-
-	defaultStorageClassYAML, err := generate("DefaultStorageClass", storageClassYAMLTemplate, input)
-	if err != nil {
-		return "", err
-	}
-
-	type ScriptValues struct {
-		CalicoYAML              string
-		DefaultStorageClassYAML string
-	}
-
-	values := ScriptValues{
-		CalicoYAML:              calicoYAML,
-		DefaultStorageClassYAML: defaultStorageClassYAML,
-	}
-
-	return generate("BootScript", netappBootScript, values)
-}

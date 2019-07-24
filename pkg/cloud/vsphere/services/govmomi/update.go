@@ -72,7 +72,7 @@ func Update(ctx *context.MachineContext) error {
 	}
 
 	// NetApp
-	reconcileTags(ctx, vm)
+	updateTags(ctx, vm)
 
 	return nil
 }
@@ -209,9 +209,9 @@ func reconcilePowerState(ctx *context.MachineContext, vm *object.VirtualMachine)
 }
 
 // NetApp
-func reconcileTags(ctx *context.MachineContext, vm *object.VirtualMachine) {
-
-	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
+// updateTags tags the machine with NKS vSphere tags. If the tags do not exist, they are created.
+// This is done in a best-effort manner. In case of errors, simply log and continue
+func updateTags(ctx *context.MachineContext, vm *object.VirtualMachine) {
 
 	tagManager := vapiTags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()

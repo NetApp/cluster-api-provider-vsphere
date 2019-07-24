@@ -37,6 +37,8 @@ func Delete(ctx *context.MachineContext) error {
 		return err
 	}
 	if vm == nil {
+		// NetApp - the VM has been deleted
+		deleteTags(ctx)
 		return nil
 	}
 
@@ -65,20 +67,14 @@ func Delete(ctx *context.MachineContext) error {
 		return errors.Wrapf(err, "error triggering destroy for %q", ctx)
 	}
 	ctx.MachineStatus.TaskRef = task.Reference().Value
-
-	// NetApp
-	deleteTags(ctx)
-
 	ctx.Logger.V(6).Info("reenqueue to wait for destroy op")
 	return &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}
 }
 
 // NetApp
+// deleteTags deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
+// This is done in a best-effort manner. In case of errors, simply log and continue
 func deleteTags(ctx *context.MachineContext) {
-
-	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
-
-	// TODO This won't work as the machine hasn't necessarily been deleted at this point
 
 	tagManager := vapiTags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()

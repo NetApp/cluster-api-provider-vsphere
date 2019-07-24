@@ -214,18 +214,17 @@ func reconcileTags(ctx *context.MachineContext, vm *object.VirtualMachine) {
 	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
 
 	tagManager := vapiTags.NewManager(ctx.RestSession.Client)
-
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
-	ctx.Logger.V(4).Info("tagging VM with cluster information", "VM", vm.Name())
+	ctx.Logger.V(4).Info("tagging VM with cluster information", "machine", ctx.Machine.Name)
 	if err := tags.TagWithClusterInfo(ctx, tagManager, vm.Reference(), workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		ctx.Logger.V(4).Info("could not tag VM with cluster information", "VM", vm.Name(), "error", err.Error())
+		ctx.Logger.V(4).Info("could not tag VM with cluster information", "machine", ctx.Machine.Name, "error", err.Error())
 	}
 
 	if isServiceCluster {
-		ctx.Logger.V(4).Info("tagging VM as service cluster machine", "VM", vm.Name())
+		ctx.Logger.V(4).Info("tagging VM as service cluster machine", "machine", ctx.Machine.Name)
 		if err := tags.TagAsServiceCluster(ctx, tagManager, vm.Reference()); err != nil {
-			ctx.Logger.V(4).Info("could not tag VM as service cluster machine", "VM", vm.Name(), "error", err.Error())
+			ctx.Logger.V(4).Info("could not tag VM as service cluster machine", "machine", ctx.Machine.Name, "error", err.Error())
 		}
 	}
 }

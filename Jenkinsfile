@@ -12,7 +12,7 @@ pipeline {
     ORG        = 'stackpoint-public'
     APP_NAME   = 'cluster-api-provider-vsphere'
     REPOSITORY = "${ORG}/${APP_NAME}"
-    GO111MODULE = 'on'
+    GO111MODULE = 'off'
     GOPATH = '/home/jenkins/go'
   }
 

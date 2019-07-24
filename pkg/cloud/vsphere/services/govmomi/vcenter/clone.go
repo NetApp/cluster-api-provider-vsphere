@@ -17,6 +17,7 @@ limitations under the License.
 package vcenter
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
@@ -92,7 +93,7 @@ func Clone(ctx *context.MachineContext, userData []byte) error {
 
 	spec := types.VirtualMachineCloneSpec{
 		Config: &types.VirtualMachineConfigSpec{
-			Annotation: ctx.String(),
+			Annotation: getMachineAnnotation(ctx), // NetApp
 			// Assign the clone's InstanceUUID the value of the Kubernetes Machine
 			// object's UID. This allows lookup of the cloned VM prior to knowing
 			// the VM's UUID.
@@ -126,6 +127,13 @@ func Clone(ctx *context.MachineContext, userData []byte) error {
 	ctx.MachineStatus.TaskRef = task.Reference().Value
 
 	return nil
+}
+
+// NetApp
+func getMachineAnnotation(ctx *context.MachineContext) string {
+	// TODO: At this point we do not know if it is a service cluster - need better communication of that
+	clusterID, workspaceID, _ := ctx.GetNKSClusterInfo()
+	return fmt.Sprintf("VM is part of NKS kubernetes cluster %s with cluster ID %s in workspace with ID %s", ctx.Cluster.Name, clusterID, workspaceID)
 }
 
 func newVMFlagInfo() *types.VirtualMachineFlagInfo {

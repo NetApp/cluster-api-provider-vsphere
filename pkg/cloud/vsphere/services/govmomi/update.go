@@ -22,6 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/object"
+	vapiTags "github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/types"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/config"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/extra"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/metadata"
 )
 
@@ -68,6 +70,9 @@ func Update(ctx *context.MachineContext) error {
 	if err := reconcileProviderID(ctx, vm); err != nil {
 		return err
 	}
+
+	// NetApp
+	reconcileTags(ctx, vm)
 
 	return nil
 }
@@ -201,4 +206,26 @@ func reconcilePowerState(ctx *context.MachineContext, vm *object.VirtualMachine)
 		return errors.Errorf("unexpected power state %q for vm %q", powerState, ctx)
 	}
 	return nil
+}
+
+// NetApp
+func reconcileTags(ctx *context.MachineContext, vm *object.VirtualMachine) {
+
+	// NOTE: Doing this in a best-effort manner. In case of failures, simply log and continue.
+
+	tagManager := vapiTags.NewManager(ctx.RestSession.Client)
+
+	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
+
+	ctx.Logger.V(4).Info("tagging VM with cluster information", "VM", vm.Name())
+	if err := tags.TagWithClusterInfo(ctx, tagManager, vm.Reference(), workspaceID, clusterID, ctx.Cluster.Name); err != nil {
+		ctx.Logger.V(4).Info("could not tag VM with cluster information", "VM", vm.Name(), "error", err.Error())
+	}
+
+	if isServiceCluster {
+		ctx.Logger.V(4).Info("tagging VM as service cluster machine", "VM", vm.Name())
+		if err := tags.TagAsServiceCluster(ctx, tagManager, vm.Reference()); err != nil {
+			ctx.Logger.V(4).Info("could not tag VM as service cluster machine", "VM", vm.Name(), "error", err.Error())
+		}
+	}
 }

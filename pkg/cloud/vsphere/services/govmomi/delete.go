@@ -18,7 +18,6 @@ package govmomi
 
 import (
 	"github.com/pkg/errors"
-	vapiTags "github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/types"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/config"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
@@ -38,7 +37,7 @@ func Delete(ctx *context.MachineContext) error {
 	}
 	if vm == nil {
 		// NetApp - the VM has been deleted
-		deleteTags(ctx)
+		tags.CleanupNKSTagsForMachine(ctx)
 		return nil
 	}
 
@@ -69,26 +68,4 @@ func Delete(ctx *context.MachineContext) error {
 	ctx.MachineStatus.TaskRef = task.Reference().Value
 	ctx.Logger.V(6).Info("reenqueue to wait for destroy op")
 	return &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}
-}
-
-// NetApp
-// deleteTags deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
-// This is done in a best-effort manner. In case of errors, simply log and continue
-func deleteTags(ctx *context.MachineContext) {
-
-	tagManager := vapiTags.NewManager(ctx.RestSession.Client)
-	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
-
-	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
-	if err := tags.DeleteClusterInfoTagAndCategoryIfNoSubjects(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		ctx.Logger.V(4).Info("could not clean up cluster information tag and category", "cluster", ctx.Cluster.Name, "error", err.Error())
-	}
-
-	if isServiceCluster {
-		ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
-		if err := tags.DeleteServiceClusterTagAndCategoryIfNoSubjects(ctx, tagManager); err != nil {
-			ctx.Logger.V(4).Info("could not clean up service cluster tag and category", "cluster", ctx.Cluster.Name, "error", err.Error())
-		}
-	}
-
 }

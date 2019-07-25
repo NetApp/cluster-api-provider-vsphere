@@ -53,6 +53,7 @@ type MachineContext struct {
 	MachineConfig *v1alpha1.VsphereMachineProviderSpec
 	MachineStatus *v1alpha1.VsphereMachineProviderStatus
 	Session       *Session
+	RestSession   *RestSession // NetApp
 }
 
 // NewMachineContextFromClusterContext creates a new MachineContext using an
@@ -101,6 +102,12 @@ func NewMachineContextFromClusterContext(
 			return nil, errors.Wrapf(err, "failed to create vSphere session for machine %q", machineCtx)
 		}
 		machineCtx.Session = session
+		// NetApp
+		restSession, err := getOrCreateCachedRESTSession(machineCtx)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to create vSphere REST session for machine %q", machineCtx)
+		}
+		machineCtx.RestSession = restSession
 	}
 
 	return machineCtx, nil
@@ -301,4 +308,33 @@ func (c *MachineContext) Patch() {
 		record.Event(c.Machine, updateSuccess, "patch status success")
 		c.Machine.ResourceVersion = result.ResourceVersion
 	}
+}
+
+// NetApp
+// GetNKSClusterInfo returns NKS information on the cluster that the machine is a part of
+// Returns clusterID, workspaceID, isServiceCluster
+func (c *MachineContext) GetNKSClusterInfo() (string, string, bool) {
+
+	const ClusterIdLabel = "hci.nks.netapp.com/cluster"
+	const WorkspaceIdLabel = "hci.nks.netapp.com/workspace"
+	const ClusterRoleLabel = "hci.nks.netapp.com/role"
+	const ServiceClusterRole = "service-cluster"
+
+	var workspaceID = ""
+	var clusterID = ""
+	var isServiceCluster bool
+
+	if val, ok := c.Cluster.Labels[WorkspaceIdLabel]; ok {
+		workspaceID = val
+	}
+	if val, ok := c.Cluster.Labels[ClusterIdLabel]; ok {
+		clusterID = val
+	}
+	if val, ok := c.Cluster.Labels[ClusterRoleLabel]; ok {
+		if val == ServiceClusterRole {
+			isServiceCluster = true
+		}
+	}
+
+	return clusterID, workspaceID, isServiceCluster
 }

@@ -19,9 +19,9 @@ package govmomi
 import (
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/vim25/types"
-
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/config"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/tags"
 	clustererror "sigs.k8s.io/cluster-api/pkg/controller/error"
 )
 
@@ -36,6 +36,8 @@ func Delete(ctx *context.MachineContext) error {
 		return err
 	}
 	if vm == nil {
+		// NetApp - the VM has been deleted
+		tags.CleanupNKSTags(ctx)
 		return nil
 	}
 

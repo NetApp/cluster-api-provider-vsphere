@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/config"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/extra"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/metadata"
 )
 
@@ -68,6 +69,9 @@ func Update(ctx *context.MachineContext) error {
 	if err := reconcileProviderID(ctx, vm); err != nil {
 		return err
 	}
+
+	// NetApp
+	tags.TagNKSMachine(ctx, vm)
 
 	return nil
 }

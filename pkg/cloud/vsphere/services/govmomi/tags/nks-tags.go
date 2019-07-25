@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vapi/tags"
@@ -40,21 +41,21 @@ func TagNKSMachine(ctx *context.MachineContext, vm *object.VirtualMachine) {
 }
 
 // NetApp
-// CleanupNKSTagsForMachine deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
+// CleanupNKSTags deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
 // This is done in a best-effort manner. In case of errors, simply log and continue
-func CleanupNKSTagsForMachine(ctx *context.MachineContext) {
+func CleanupNKSTags(ctx *context.MachineContext) {
 
 	tagManager := tags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
-	if err := deleteClusterInfoTagAndCategoryIfNoSubjects(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
+	if err := deleteClusterInfoTagAndCategory(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
 		klog.Errorf("could not clean up cluster information tag and category for cluster %q: %v", ctx.Cluster.Name, err)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
-		if err := deleteServiceClusterTagAndCategoryIfNoSubjects(ctx, tagManager); err != nil {
+		if err := deleteServiceClusterTagAndCategory(ctx, tagManager); err != nil {
 			klog.Errorf("could not clean up service cluster tag and category for cluster %q: %v", ctx.Cluster.Name, err)
 		}
 	}
@@ -80,9 +81,9 @@ func tagWithClusterInfo(ctx *context.MachineContext, tm *tags.Manager, moref typ
 }
 
 // NetApp
-// deleteClusterInfoTagAndCategoryIfNoSubjects deletes the cluster info tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
+// deleteClusterInfoTagAndCategory deletes the cluster info tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
 // It also deletes the tag category if there are no tags left in the category
-func deleteClusterInfoTagAndCategoryIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager, workspaceID string, clusterID string, clusterName string) error {
+func deleteClusterInfoTagAndCategory(ctx *context.MachineContext, tm *tags.Manager, workspaceID string, clusterID string, clusterName string) error {
 
 	tagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, clusterName)
 
@@ -91,7 +92,7 @@ func deleteClusterInfoTagAndCategoryIfNoSubjects(ctx *context.MachineContext, tm
 		return errors.Wrapf(err, "could not get tag with name %s", tagName)
 	}
 
-	return deleteNKSTagIfNoSubjects(ctx, tm, tag)
+	return deleteNKSTag(ctx, tm, tag)
 }
 
 // NetApp
@@ -111,16 +112,16 @@ func tagAsServiceCluster(ctx *context.MachineContext, tm *tags.Manager, moref ty
 }
 
 // NetApp
-// deleteServiceClusterTagAndCategoryIfNoSubjects deletes the service cluster tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
+// deleteServiceClusterTagAndCategory deletes the service cluster tag if there are no subjects tied to the tag, i.e. no objects are tagged with that tag
 // It also deletes the tag category if there are no tags left in the category
-func deleteServiceClusterTagAndCategoryIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager) error {
+func deleteServiceClusterTagAndCategory(ctx *context.MachineContext, tm *tags.Manager) error {
 
 	tag, err := tm.GetTag(ctx, serviceClusterTagName)
 	if err != nil {
 		return errors.Wrapf(err, "could not get tag with name %s", serviceClusterTagName)
 	}
 
-	return deleteNKSTagIfNoSubjects(ctx, tm, tag)
+	return deleteNKSTag(ctx, tm, tag)
 }
 
 // NetApp
@@ -189,7 +190,7 @@ func getOrCreateNKSTagCategory(ctx *context.MachineContext, tm *tags.Manager) (*
 }
 
 // NetApp
-func deleteNKSTagIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager, tag *tags.Tag) error {
+func deleteNKSTag(ctx *context.MachineContext, tm *tags.Manager, tag *tags.Tag) error {
 
 	attachedObjects, err := tm.ListAttachedObjects(ctx, tag.ID)
 	if err != nil {
@@ -209,7 +210,7 @@ func deleteNKSTagIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager, tag
 			return errors.Wrapf(err, "could not get category with ID %s", tag.CategoryID)
 		}
 
-		err = deleteNKSTagCategoryIfNoSubjects(ctx, tm, category)
+		err = deleteNKSTagCategory(ctx, tm, category)
 		if err != nil {
 			return errors.Wrapf(err, "could not delete category for tag %s with name %s", tag.Name, category.Name)
 		}
@@ -222,7 +223,7 @@ func deleteNKSTagIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager, tag
 }
 
 // NetApp
-func deleteNKSTagCategoryIfNoSubjects(ctx *context.MachineContext, tm *tags.Manager, category *tags.Category) error {
+func deleteNKSTagCategory(ctx *context.MachineContext, tm *tags.Manager, category *tags.Category) error {
 
 	tagsInCategory, err := tm.GetTagsForCategory(ctx, category.Name)
 	if err != nil {

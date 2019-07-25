@@ -37,7 +37,7 @@ func Delete(ctx *context.MachineContext) error {
 	}
 	if vm == nil {
 		// NetApp - the VM has been deleted
-		tags.CleanupNKSTagsForMachine(ctx)
+		tags.CleanupNKSTags(ctx)
 		return nil
 	}
 

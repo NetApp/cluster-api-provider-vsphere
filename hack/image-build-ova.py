@@ -168,7 +168,10 @@ _OVF_TEMPLATE = '''<?xml version='1.0' encoding='UTF-8'?>
   </DiskSection>
   <NetworkSection>
     <Info>The list of logical networks</Info>
-    <Network ovf:name="nic0">
+    <Network ovf:name="vm_network">
+      <Description>Please select a network</Description>
+    </Network>
+    <Network ovf:name="storage_network">
       <Description>Please select a network</Description>
     </Network>
   </NetworkSection>
@@ -256,7 +259,7 @@ _OVF_TEMPLATE = '''<?xml version='1.0' encoding='UTF-8'?>
       <Item>
         <rasd:AddressOnParent>0</rasd:AddressOnParent>
         <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
-        <rasd:Connection>nic0</rasd:Connection>
+        <rasd:Connection>vm_network</rasd:Connection>
         <rasd:ElementName>Network adapter 1</rasd:ElementName>
         <rasd:InstanceID>8</rasd:InstanceID>
         <rasd:ResourceSubType>VmxNet3</rasd:ResourceSubType>

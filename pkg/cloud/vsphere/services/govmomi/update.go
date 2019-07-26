@@ -18,7 +18,6 @@ package govmomi
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/object"
@@ -159,11 +158,6 @@ func reconcileNetwork(ctx *context.MachineContext, vm *object.VirtualMachine) er
 	}
 	if powerState == types.VirtualMachinePowerStatePoweredOn {
 		for _, netStatus := range ctx.MachineStatus.Network {
-			// NetApp: Only care about VM_Network
-			// TODO: NetApp - ISCSI-B not getting an IP - but we don't need it? Figure this out.
-			if !strings.Contains(netStatus.NetworkName, "VM_Network") { // TODO Also need better check here
-				continue
-			}
 			if len(netStatus.IPAddrs) == 0 {
 				ctx.Logger.V(6).Info("reenqueue to wait on IP addresses")
 				return &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}

@@ -1,8 +1,7 @@
 # Makefile
 
-VERSION ?= $(shell git describe --exact-match 2> /dev/null || \
-                 git describe --match=$(git rev-parse --short=8 HEAD) --always --dirty --abbrev=8)
-REGISTRY ?=gcr.io/cnx-cluster-api/cluster-api-provider-vsphere-ci
+VERSION ?= $(shell git describe --always --dirty)
+REGISTRY ?=gcr.io/cluster-api-provider-vsphere/pr/ci
 
 all: build
 .PHONY : all
@@ -17,9 +16,12 @@ build: copyspec
 
 push: build
 	@echo "logging into gcr.io registry with key file"
-	@echo $$GCR_KEY_FILE | docker login -u _json_key --password-stdin gcr.io
+	# TODO hardcoded key file location is a temp workaround
+	gcloud auth activate-service-account --key-file /root/.capv/keyfile.json
+	docker login -u _json_key --password-stdin gcr.io </root/.capv/keyfile.json
 	docker push $(REGISTRY):$(VERSION)
 	@echo docker logout gcr.io
+	gcloud auth revoke
 
 clean:
 	docker image rm -f $(REGISTRY):$(VERSION)

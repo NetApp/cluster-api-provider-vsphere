@@ -13,30 +13,14 @@
 # limitations under the License.
 
 ################################################################################
-##                            DOWNLOAD KUSTOMIZE                              ##
-################################################################################
-FROM debian:stretch-slim as kustomize
-RUN apt-get --assume-no update && apt-get -y install curl
-ARG KUSTOMIZE_VERSION
-ENV KUSTOMIZE_VERSION 2.0.0
-RUN curl -Lo /kustomize \
-    "https://github.com/kubernetes-sigs/kustomize/releases/download/v${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64" && \
-    chmod 0755 /kustomize
-
-
-################################################################################
 ##                                MAIN STAGE                                  ##
 ################################################################################
-FROM debian:stretch-slim
+ARG BASE_IMAGE=gcr.io/cluster-api-provider-vsphere/extra/manifests-base:v0.4.0-beta.1-6-g9e51ae05
+FROM ${BASE_IMAGE}
 LABEL "maintainer" "Andrew Kutz <akutz@vmware.com>"
 
-# Install python
-RUN apt-get --assume-no update && apt-get -y install curl python
-
-# Copy kustomize from the kustomize build stage.
-COPY --from=kustomize /kustomize /usr/local/bin/kustomize
-
 # Run things out of the /build directory.
+ENV BUILDDIR /build
 WORKDIR /build
 
 # Copy in the hack tooling.
@@ -49,12 +33,19 @@ COPY ./vendor/sigs.k8s.io/cluster-api/config ./vendor/sigs.k8s.io/cluster-api/co
 # Copy in the examples directory.
 COPY ./cmd/clusterctl/examples/vsphere/*.template ./cmd/clusterctl/examples/vsphere/
 
+# Ensure all the directories in the /build directory are writeable.
+RUN find . -type d -exec chmod 0777 \{\} \;
+
 # This build arg specifies the value of the -m flag for generate-yaml.sh, the
 # CAPV manager image inserted into the generated provider components.
-ARG CAPV_MANAGER_IMAGE=gcr.io/cnx-cluster-api/vsphere-cluster-api-provider:latest
+ARG CAPV_MANAGER_IMAGE=gcr.io/cluster-api-provider-vsphere/ci/manager:latest
 ENV CAPV_MANAGER_IMAGE=${CAPV_MANAGER_IMAGE}
 
-# The YAML is always written to the /out directory. Mount the volumes there.
-ENV OUT_DIR /out
+# Change the working directory to /.
+ENV WORKDIR /out
+WORKDIR /out
 
-ENTRYPOINT [ "./hack/generate-yaml.sh" ]
+# Indicate that this is being execute in a container.
+ENV DOCKER_ENABLED 1
+
+ENTRYPOINT [ "/build/hack/generate-yaml.sh" ]

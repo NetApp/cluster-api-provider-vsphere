@@ -1,5 +1,5 @@
 {
-  "kubernetes_semver": "v1.13.6",
-  "kubernetes_version": "1.13.6-00",
+  "kubernetes_semver": "v1.14.3",
+  "kubernetes_version": "1.14.3-00",
   "kubernetes_source": "pkg"
 }

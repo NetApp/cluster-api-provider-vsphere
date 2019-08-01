@@ -2,14 +2,14 @@
   "build_name": "debian-10",
   "distro_name": "debian",
   "os_display_name": "Debian 10",
-  "guest_os_type": "debian-64",
+  "guest_os_type": "ubuntu-64",
   "iso_url": "https://cdimage.debian.org/mirror/cdimage/release/current/amd64/iso-cd/debian-10.0.0-amd64-netinst.iso",
   "iso_checksum": "3dbb597b7f11dbda71cda08d4c1339c1eb565e784c75409987fa2b91182d9240",
   "iso_checksum_type": "sha256",
   "ssh_username": "debian",
   "ssh_password": "debian",
-  "boot_command_prefix": "<esc><wait><esc><wait><enter><wait>/install/vmlinuz auto console-setup/ask_detect=false console-setup/layoutcode=us console-setup/modelcode=pc105 debconf/frontend=noninteractive debian-installer=en_US fb=false initrd=/install/initrd.gz kbd-chooser/method=us keyboard-configuration/layout=USA keyboard-configuration/variant=USA locale=en_US netcfg/get_domain=local netcfg/get_hostname=localhost grub-installer/bootdev=/dev/sda noapic preseed/url=",
-  "boot_command_suffix": "/18.04/preseed.cfg -- <wait><enter><wait>",
+  "boot_command_prefix": "<wait10><esc><wait>install preseed/url=",
+  "boot_command_suffix": "/base/preseed.cfg <wait> auto debian-installer=en_US <wait> locale=en_US keymap=us <wait> netcfg/get_hostname=localhost <wait> netcfg/get_domain=local <wait> fb=false <wait> debconf/frontend=noninteractive <wait> console-setup/ask_detect=false <wait> console-keymaps-at/keymap=us <wait> grub-installer/bootdev=/dev/sda <enter>",
   "goss_vars_file": "goss/ubuntu-vars.yaml",
   "shutdown_command": "shutdown -P now"
 }

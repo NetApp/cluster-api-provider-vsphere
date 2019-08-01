@@ -19,7 +19,7 @@ all: build
 
 # A list of the supported distribution/version combinations. Each member
 # of BUILD_NAMES must have a corresponding file "config/BUILD_NAME.json".
-BUILD_NAMES ?= centos-7 ubuntu-1804
+BUILD_NAMES ?= debian-10
 
 # The version of Kubernetes to install.
 KUBE_JSON ?= config/kubernetes.json
@@ -30,6 +30,7 @@ OLD_PACKER_FLAGS := $(PACKER_FLAGS)
 PACKER_FLAGS := -var="capv_version=$(shell git describe --dirty)"
 PACKER_FLAGS += $(foreach f,$(abspath $(PACKER_VAR_FILES)),-var-file="$(f)" )
 PACKER_FLAGS += $(OLD_PACKER_FLAGS)
+PACKER_FLAGS += -on-error=ask # -debug
 
 BUILD_TARGETS := $(addprefix build-,$(BUILD_NAMES))
 $(BUILD_TARGETS):

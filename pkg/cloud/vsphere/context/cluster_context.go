@@ -102,11 +102,17 @@ func NewClusterContext(params *ClusterContextParams) (*ClusterContext, error) {
 	}
 	logr = logr.WithName(params.Cluster.APIVersion).WithName(params.Cluster.Namespace).WithName(params.Cluster.Name)
 
-	const todoSecretName = ""
-
 	user := clusterConfig.Username
 	pass := clusterConfig.Password
-	if secretName := todoSecretName; secretName != "" {
+
+	// NetApp
+	const credentialSecretNameAnnotationKey = "cluster-api-vsphere-credentials-secret-name"
+	credentialSecretName, credSecretNameAnnotationExists := params.Cluster.Annotations[credentialSecretNameAnnotationKey]
+	if !credSecretNameAnnotationExists {
+		logr.V(4).Info("vSphere credential secret name annotation missing", "annotation", credentialSecretNameAnnotationKey)
+	}
+
+	if secretName := credentialSecretName; credSecretNameAnnotationExists && secretName != "" {
 		if params.CoreClient == nil {
 			return nil, errors.Errorf("credential secret %q specified without core client", secretName)
 		}
@@ -122,6 +128,11 @@ func NewClusterContext(params *ClusterContextParams) (*ClusterContext, error) {
 		}
 		user, pass = string(userBuf), string(passBuf)
 		logr.V(2).Info("found vSphere credentials")
+	}
+
+	// NetApp
+	if user == "" || pass == "" {
+		return nil, errors.Errorf("no vSphere credentials found")
 	}
 
 	return &ClusterContext{

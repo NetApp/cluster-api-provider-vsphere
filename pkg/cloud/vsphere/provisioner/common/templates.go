@@ -1350,6 +1350,7 @@ cat > setup/backend.json << EOF
   "Endpoint": "https://${ELEMENT_USER}:${ELEMENT_PASSWORD}@${ELEMENT_MVIP}/json-rpc/8.0",
   "SVIP": "${ELEMENT_SVIP}:3260",
   "TenantName": "nks-trident",
+  "backendName": "solidfire",
   "InitiatorIFace": "default",
   "UseCHAP": true,
   "Types": [
@@ -1357,14 +1358,14 @@ cat > setup/backend.json << EOF
           "Type": "Bronze",
           "Qos": {
               "minIOPS": 1000,
-              "maxIOPS": 2000,
-              "burstIOPS": 4000
+              "maxIOPS": 4000,
+              "burstIOPS": 6000
           }
       },
       {
           "Type": "Silver",
           "Qos": {
-              "minIOPS": 4000,
+              "minIOPS": 5000,
               "maxIOPS": 25000,
               "burstIOPS": 40000
           }
@@ -1372,9 +1373,9 @@ cat > setup/backend.json << EOF
       {
           "Type": "Gold",
           "Qos": {
-              "minIOPS": 6000,
-              "maxIOPS": 50000,
-              "burstIOPS": 65000
+              "minIOPS": 15000,
+              "maxIOPS": 180000,
+              "burstIOPS": 200000
           }
       }
   ]
@@ -1391,7 +1392,7 @@ metadata:
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
-  IOPS: "1500"
+  IOPS: "180000"
   fsType: "ext4"
 ---
 apiVersion: storage.k8s.io/v1
@@ -1401,7 +1402,8 @@ metadata:
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
-  IOPS: "1500"
+  storagePools: "solidfire:Silver"
+  IOPS: "25000"
   fsType: "ext4"
 ---
 apiVersion: storage.k8s.io/v1
@@ -1411,7 +1413,7 @@ metadata:
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
-  IOPS: "1500"
+  IOPS: "4000"
   fsType: "ext4"
 EOF
 

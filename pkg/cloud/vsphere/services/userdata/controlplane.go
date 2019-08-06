@@ -68,6 +68,13 @@ write_files:
       127.0.0.1   localhost
       127.0.0.1   {{HostNameLookup}}
 
+-   path: /tmp/netapp-change-host-name.sh
+    owner: root:root
+    permissions: '0755' 
+	content: |
+      #!/bin/bash
+      hostnamectl --static set-hostname {{HostNameLookup}}
+
 -   path: /etc/kubernetes/pki/ca.crt
     encoding: "base64"
     owner: root:root
@@ -153,6 +160,7 @@ write_files:
 #  config: /tmp/kubeadm.yaml
 
 runcmd:
+  - /tmp/netapp-change-host-name.sh
   - /tmp/netapp-boot.sh
 
 `

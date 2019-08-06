@@ -71,7 +71,7 @@ write_files:
 -   path: /tmp/netapp-change-host-name.sh
     owner: root:root
     permissions: '0755' 
-	content: |
+    content: |
       #!/bin/bash
       hostnamectl --static set-hostname {{HostNameLookup}}
 

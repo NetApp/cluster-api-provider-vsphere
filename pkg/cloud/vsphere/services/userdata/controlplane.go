@@ -73,7 +73,7 @@ write_files:
     permissions: '0755' 
     content: |
       #!/bin/bash
-      sudo hostnamectl set-hostname {{HostNameLookup}}
+      hostnamectl set-hostname {{HostNameLookup}}
 
 -   path: /etc/kubernetes/pki/ca.crt
     encoding: "base64"

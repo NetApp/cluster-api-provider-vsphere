@@ -158,10 +158,6 @@ func reconcileNetwork(ctx *context.MachineContext, vm *object.VirtualMachine) er
 	}
 	if powerState == types.VirtualMachinePowerStatePoweredOn {
 		for _, netStatus := range ctx.MachineStatus.Network {
-			if len(netStatus.IPAddrs) == 0 {
-				ctx.Logger.V(6).Info("reenqueue to wait on IP addresses")
-				return &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}
-			}
 			for _, ip := range netStatus.IPAddrs {
 				ipAddrs = append(ipAddrs, corev1.NodeAddress{
 					Type:    corev1.NodeInternalIP,
@@ -169,6 +165,12 @@ func reconcileNetwork(ctx *context.MachineContext, vm *object.VirtualMachine) er
 				})
 			}
 		}
+
+		if len(ipAddrs) == 0 {
+			ctx.Logger.V(6).Info("requeuing to wait on IP addresses")
+			return &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}
+		}
+
 	}
 
 	// Use the collected IP addresses to assign the Machine's addresses.

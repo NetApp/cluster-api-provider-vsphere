@@ -50,9 +50,6 @@ public-network = "{{ .Network }}"
 {{if .SSHAuthorizedKeys}}ssh_authorized_keys:{{range .SSHAuthorizedKeys}}
 - "{{.}}"{{end}}{{end}}
 
-runcmd:
--   [hostname, {{HostNameLookup}}]
-
 write_files:
 -   path: /etc/hostname
     owner: root:root
@@ -67,13 +64,6 @@ write_files:
       ::1         ipv6-localhost ipv6-loopback
       127.0.0.1   localhost
       127.0.0.1   {{HostNameLookup}}
-
--   path: /tmp/netapp-change-host-name.sh
-    owner: root:root
-    permissions: '0755' 
-    content: |
-      #!/bin/bash
-      hostnamectl set-hostname {{HostNameLookup}}
 
 -   path: /etc/kubernetes/pki/ca.crt
     encoding: "base64"
@@ -160,7 +150,7 @@ write_files:
 #  config: /tmp/kubeadm.yaml
 
 runcmd:
-  - /tmp/netapp-change-host-name.sh
+  - [hostname, {{HostNameLookup}}]
   - /tmp/netapp-boot.sh
 
 `

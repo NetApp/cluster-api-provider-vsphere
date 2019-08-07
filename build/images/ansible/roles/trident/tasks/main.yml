@@ -22,3 +22,4 @@
     src: /etc/trident/trident-installer/tridentctl
     dest: /usr/local/bin
     remote_src: yes
+    mode: '0751'

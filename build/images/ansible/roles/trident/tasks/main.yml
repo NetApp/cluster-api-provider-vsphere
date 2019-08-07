@@ -1,0 +1,24 @@
+# NetApp
+
+---
+- name: Download Trident tarball
+  get_url:
+    url: https://github.com/NetApp/trident/releases/download/v19.04.1/trident-installer-19.04.1.tar.gz
+    dest: /tmp/trident.tar.gz
+
+- name: Create Trident directory
+  file:
+    path: /etc/trident
+    state: directory
+
+- name: Extract Trident tarball
+  unarchive:
+    src: /tmp/trident.tar.gz
+    dest: /etc/trident
+    remote_src: yes
+
+- name: Copy Trident CLI to bin
+  copy:
+    src: /etc/trident/trident-installer/tridentctl
+    dest: /usr/local/bin
+    remote_src: yes

@@ -20,3 +20,4 @@
     - role: kubernetes
     - role: providers
     - role: sysprep
+    - role: trident

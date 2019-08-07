@@ -50,9 +50,6 @@ public-network = "{{ .Network }}"
 {{if .SSHAuthorizedKeys}}ssh_authorized_keys:{{range .SSHAuthorizedKeys}}
 - "{{.}}"{{end}}{{end}}
 
-runcmd:
--   [hostname, {{HostNameLookup}}]
-
 write_files:
 -   path: /etc/hostname
     owner: root:root
@@ -153,6 +150,7 @@ write_files:
 #  config: /tmp/kubeadm.yaml
 
 runcmd:
+  - [hostname, {{HostNameLookup}}]
   - /tmp/netapp-boot.sh
 
 `

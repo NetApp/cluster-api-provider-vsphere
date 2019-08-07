@@ -1,8 +1,16 @@
 package userdata
 
+import "fmt"
+
 // NetApp
 type BootScriptInput struct {
-	Datastore string
+	Datastore       string
+	ClusterName     string
+	MachineName     string
+	ElementMVIP     string
+	ElementSVIP     string
+	ElementUser     string
+	ElementPassword string
 }
 
 // NetApp
@@ -10,17 +18,24 @@ func NewBootScript(input *BootScriptInput) (string, error) {
 
 	defaultStorageClassYAML, err := generate("DefaultStorageClass", storageClassYAMLTemplate, input)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to generate default storage class script: %v", err)
+	}
+
+	tridentStorageClassYAML, err := generate("TridentStorageClass", tridentStorageClassYAMLTemplate, input)
+	if err != nil {
+		return "", fmt.Errorf("unable to generate trident storage class script: %v", err)
 	}
 
 	type scriptValues struct {
 		CalicoYAML              string
 		DefaultStorageClassYAML string
+		TridentStorageClassYAML string
 	}
 
 	values := scriptValues{
 		CalicoYAML:              calicoYAML,
 		DefaultStorageClassYAML: defaultStorageClassYAML,
+		TridentStorageClassYAML: tridentStorageClassYAML,
 	}
 
 	return generate("BootScript", bootScript, values)
@@ -52,6 +67,9 @@ cat > netapp-addons/default-storage-class.yaml << EOF
 {{.DefaultStorageClassYAML}}
 EOF
 kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f netapp-addons/default-storage-class.yaml
+
+# Trident storage class
+{{.TridentStorageClassYAML}}
 `
 
 	storageClassYAMLTemplate = `kind: StorageClass
@@ -66,6 +84,132 @@ parameters:
   diskformat: thin
   fstype: ext3
 `
+
+	assertClusterReadyTemplate = `kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vsphere
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/vsphere-volume
+parameters:
+  datastore: {{.Datastore}}
+  diskformat: thin
+  fstype: ext3
+`
+
+	tridentStorageClassYAMLTemplate = `
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+if [ -z "{{.ElementMVIP}}" ]
+then
+      echo "Skipping element setup"
+      exit 0
+fi
+until $(kubectl get pod kube-apiserver-{{.MachineName}} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+until $(kubectl get pod kube-controller-manager-{{.MachineName}} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+until $(kubectl get pod kube-scheduler-{{.MachineName}} -n kube-system &> /dev/null); do
+    printf '.'
+    sleep 3
+done
+while [[ $(kubectl get pod kube-apiserver-{{.MachineName}} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+while [[ $(kubectl get pod kube-controller-manager-{{.MachineName}} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+while [[ $(kubectl get pod kube-scheduler-{{.MachineName}} -n kube-system -o json | jq . | grep '"ready": true' | wc -l | xargs) != 1 ]]
+do
+    printf '.'
+    sleep 2
+done
+
+mkdir setup
+
+cat > setup/backend.json << EOF
+{
+  "version": 1,
+  "storageDriverName": "solidfire-san",
+  "Endpoint": "https://{{.ElementUser}}:{{.ElementPassword}}@{{.ElementMVIP}}/json-rpc/8.0",
+  "SVIP": "{{.ElementSVIP}}:3260",
+  "TenantName": "nks-trident",
+  "backendName": "solidfire",
+  "InitiatorIFace": "default",
+  "UseCHAP": true,
+  "Types": [
+      {
+          "Type": "Bronze",
+          "Qos": {
+              "minIOPS": 1000,
+              "maxIOPS": 4000,
+              "burstIOPS": 6000
+          }
+      },
+      {
+          "Type": "Silver",
+          "Qos": {
+              "minIOPS": 5000,
+              "maxIOPS": 25000,
+              "burstIOPS": 40000
+          }
+      },
+      {
+          "Type": "Gold",
+          "Qos": {
+              "minIOPS": 15000,
+              "maxIOPS": 180000,
+              "burstIOPS": 200000
+          }
+      }
+  ]
+}
+EOF
+
+tridentctl install --pv nks-trident-cluster-{{.ClusterName}} --pvc nks-trident-cluster-{{.ClusterName}} --volume-name nks-trident-cluster-${ClusterName} -n trident
+
+cat <<EOF | kubectl create -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-gold
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  IOPS: "180000"
+  fsType: "ext4"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-silver
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  storagePools: "solidfire:Silver"
+  IOPS: "25000"
+  fsType: "ext4"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: solidfire-bronze
+provisioner: netapp.io/trident
+parameters:
+  backendType: "solidfire-san"
+  IOPS: "4000"
+  fsType: "ext4"
+EOF
+  `
 
 	calicoYAML = `# Calico Version v3.6
 # https://docs.projectcalico.org/v3.6/release-notes/

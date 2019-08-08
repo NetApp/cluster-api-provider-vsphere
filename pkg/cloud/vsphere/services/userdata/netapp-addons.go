@@ -121,7 +121,9 @@ do
     sleep 2
 done
 
-cat > netapp-addons/trident-backend.json << EOF
+mkdir setup
+
+cat > setup/trident-backend.json << EOF
 {
   "version": 1,
   "storageDriverName": "solidfire-san",
@@ -162,7 +164,7 @@ EOF
 
 tridentctl install -n trident
 
-tridentctl create backend -f netapp-addons/trident-backend.json -n trident
+tridentctl create backend -f setup/trident-backend.json -n trident
 
 cat <<EOF | kubectl create -f -
 apiVersion: storage.k8s.io/v1

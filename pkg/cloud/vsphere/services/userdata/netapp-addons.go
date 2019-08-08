@@ -21,7 +21,7 @@ func NewBootScript(input *BootScriptInput) (string, error) {
 		return "", fmt.Errorf("unable to generate default storage class script: %v", err)
 	}
 
-	tridentStorageClassYAML, err := generate("TridentStorageClass", tridentStorageClassYAMLTemplate, input)
+	tridentInstallScript, err := generate("TridentStorageClass", TridentInstallScriptTemplate, input)
 	if err != nil {
 		return "", fmt.Errorf("unable to generate trident storage class script: %v", err)
 	}
@@ -29,13 +29,13 @@ func NewBootScript(input *BootScriptInput) (string, error) {
 	type scriptValues struct {
 		CalicoYAML              string
 		DefaultStorageClassYAML string
-		TridentStorageClassYAML string
+		TridentInstallScript    string
 	}
 
 	values := scriptValues{
 		CalicoYAML:              calicoYAML,
 		DefaultStorageClassYAML: defaultStorageClassYAML,
-		TridentStorageClassYAML: tridentStorageClassYAML,
+		TridentInstallScript:    tridentInstallScript,
 	}
 
 	return generate("BootScript", bootScript, values)
@@ -69,7 +69,7 @@ EOF
 kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f netapp-addons/default-storage-class.yaml
 
 # Trident storage class
-{{.TridentStorageClassYAML}}
+{{.TridentInstallScript}}
 `
 
 	storageClassYAMLTemplate = `kind: StorageClass
@@ -85,20 +85,7 @@ parameters:
   fstype: ext3
 `
 
-	assertClusterReadyTemplate = `kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: vsphere
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: kubernetes.io/vsphere-volume
-parameters:
-  datastore: {{.Datastore}}
-  diskformat: thin
-  fstype: ext3
-`
-
-	tridentStorageClassYAMLTemplate = `
+	TridentInstallScriptTemplate = `
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
 if [ -z "{{.ElementMVIP}}" ]

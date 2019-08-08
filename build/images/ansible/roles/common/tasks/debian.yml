@@ -45,3 +45,10 @@
     name: "{{ common_pinned_debs }}"
     state: present
     force: yes
+
+# NetApp
+- name: install netapp dependencies
+  apt:
+    force_apt_get: True
+    name: "{{ common_netapp_debs }}"
+    state: latest

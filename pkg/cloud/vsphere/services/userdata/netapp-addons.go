@@ -123,7 +123,7 @@ done
 
 mkdir setup
 
-cat > setup/backend.json << EOF
+cat > setup/trident-backend.json << EOF
 {
   "version": 1,
   "storageDriverName": "solidfire-san",
@@ -162,7 +162,9 @@ cat > setup/backend.json << EOF
 }
 EOF
 
-tridentctl install --pv nks-trident-cluster-{{.ClusterName}} --pvc nks-trident-cluster-{{.ClusterName}} --volume-name nks-trident-cluster-${ClusterName} -n trident
+tridentctl install -n trident
+
+tridentctl create backend -f setup/trident-backend.json -n trident
 
 cat <<EOF | kubectl create -f -
 apiVersion: storage.k8s.io/v1

@@ -3,7 +3,7 @@
 ---
 - name: Download Trident tarball
   get_url:
-    url: https://github.com/NetApp/trident/releases/download/v19.04.1/trident-installer-19.04.1.tar.gz
+    url: https://github.com/NetApp/trident/releases/download/v19.07.0/trident-installer-19.07.0.tar.gz
     dest: /tmp/trident.tar.gz
 
 - name: Create Trident directory

@@ -162,7 +162,7 @@ cat > setup/backend.json << EOF
 }
 EOF
 
-tridentctl install --pv nks-trident-cluster-{{.ClusterName}} --pvc nks-trident-cluster-{{.ClusterName}} --volume-name nks-trident-cluster-${ClusterName} -n trident
+tridentctl install -n trident
 
 cat <<EOF | kubectl create -f -
 apiVersion: storage.k8s.io/v1

@@ -5,7 +5,6 @@ import "fmt"
 // NetApp
 type BootScriptInput struct {
 	Datastore       string
-	ClusterName     string
 	MachineName     string
 	ElementMVIP     string
 	ElementSVIP     string
@@ -137,25 +136,25 @@ cat > setup/trident-backend.json << EOF
       {
           "Type": "Bronze",
           "Qos": {
-              "minIOPS": 1000,
-              "maxIOPS": 4000,
-              "burstIOPS": 6000
+              "minIOPS": 100,
+              "maxIOPS": 400,
+              "burstIOPS": 800
           }
       },
       {
           "Type": "Silver",
           "Qos": {
-              "minIOPS": 5000,
-              "maxIOPS": 25000,
-              "burstIOPS": 40000
+              "minIOPS": 2000,
+              "maxIOPS": 4000,
+              "burstIOPS": 8000
           }
       },
       {
           "Type": "Gold",
           "Qos": {
-              "minIOPS": 15000,
-              "maxIOPS": 180000,
-              "burstIOPS": 200000
+              "minIOPS": 4000,
+              "maxIOPS": 16000,
+              "burstIOPS": 32000
           }
       }
   ]
@@ -171,31 +170,42 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: solidfire-gold
+  labels:
+    minIOPS: "4000"
+    maxIOPS: "16000"
+    burstIOPS: "32000"
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
-  IOPS: "180000"
+  storagePools: "solidfire:Gold"
   fsType: "ext4"
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: solidfire-silver
+  labels:
+    minIOPS: "2000"
+    maxIOPS: "4000"
+    burstIOPS: "8000"
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
   storagePools: "solidfire:Silver"
-  IOPS: "25000"
   fsType: "ext4"
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: solidfire-bronze
+  labels:
+    minIOPS: "100"
+    maxIOPS: "400"
+    burstIOPS: "800"
 provisioner: netapp.io/trident
 parameters:
   backendType: "solidfire-san"
-  IOPS: "4000"
+  storagePools: "solidfire:Bronze"
   fsType: "ext4"
 EOF
   `

@@ -230,7 +230,6 @@ func generateUserData(ctx *context.MachineContext, bootstrapToken string) ([]byt
 			// NetApp
 			bootScript, err := userdata.NewBootScript(&userdata.BootScriptInput{
 				Datastore:       ctx.MachineConfig.Datastore,
-				ClusterName:     ctx.Cluster.Name,
 				MachineName:     ctx.Machine.Name,
 				ElementMVIP:     ctx.Machine.Annotations["ElementMVIP"],
 				ElementSVIP:     ctx.Machine.Annotations["ElementSVIP"],

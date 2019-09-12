@@ -68,9 +68,9 @@ func NewClusterContext(params *ClusterContextParams) (*ClusterContext, error) {
 	logr = logr.WithName(params.Cluster.APIVersion).WithName(params.Cluster.Namespace).WithName(params.Cluster.Name)
 
 	// NetApp - get credentials from secret
-	username, password, err := getVSphereCredentials(logr, params.Client, params.VSphereCluster)
+	username, password, err := getVSphereCredentials(logr, params.Client, params.Cluster)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not get vsphere credentials")
+		return nil, errors.Wrapf(err, "could not get vsphere credentials for cluster %s", params.Cluster.Name)
 	}
 
 	return &ClusterContext{
@@ -161,19 +161,20 @@ func (c *ClusterContext) Patch() error {
 }
 
 // NetApp
-func getVSphereCredentials(logger logr.Logger, c client.Client, vsphereCluster *v1alpha2.VSphereCluster) (string, string, error) {
+func getVSphereCredentials(logger logr.Logger, c client.Client, cluster *clusterv1.Cluster) (string, string, error) {
 
-	secretNamespace := vsphereCluster.Spec.CloudProviderConfiguration.Global.SecretNamespace
-	if secretNamespace == "" {
-		return "", "", fmt.Errorf("secret namespace missing from vsphere cluster")
+	const credentialSecretNameAnnotationKey = "cluster-api-vsphere-credentials-secret-name"
+	secretName, ok := cluster.Annotations[credentialSecretNameAnnotationKey]
+	if !ok {
+		return "", "", fmt.Errorf("vSphere credential secret name annotation missing")
 	}
-
-	secretName := vsphereCluster.Spec.CloudProviderConfiguration.Global.SecretName
 	if secretName == "" {
-		return "", "", fmt.Errorf("secret name missing from vsphere cluster")
+		return "", "", fmt.Errorf("vSphere credential secret name missing")
 	}
 
-	logger.V(4).Info("Fetching VSphere credentials from secret", "secret-namespace", secretNamespace, "secret-name", secretName)
+	secretNamespace := cluster.ObjectMeta.Namespace
+
+	logger.V(4).Info("Fetching vSphere credentials from secret", "secret-namespace", secretNamespace, "secret-name", secretName)
 
 	credentialSecret := &apiv1.Secret{}
 	credentialSecretKey := client.ObjectKey{
@@ -191,7 +192,7 @@ func getVSphereCredentials(logger logr.Logger, c client.Client, vsphereCluster *
 	}
 	username, password := string(userBuf), string(passBuf)
 
-	logger.V(4).Info("Found VSphere credentials in secret", "secret-namespace", secretNamespace, "secret-name", secretName)
+	logger.V(4).Info("Found vSphere credentials in secret", "secret-namespace", secretNamespace, "secret-name", secretName)
 
 	return username, password, nil
 }

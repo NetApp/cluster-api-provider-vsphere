@@ -246,7 +246,6 @@ func (r *VSphereClusterReconciler) reconcileCloudConfigSecret(ctx *context.Clust
 		credentials[fmt.Sprintf("%s.password", server)] = ctx.Pass()
 	}
 	// Define the kubeconfig secret for the target cluster.
-	// TODO(thorsteinn) Here we are trying to create the cloud provider credentials on the target (user) cluster. We don't have the same wksp-xxx-cluster-xxx namespaces there ofc
 	secret := &apiv1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ctx.VSphereCluster.Spec.CloudProviderConfiguration.Global.SecretNamespace,

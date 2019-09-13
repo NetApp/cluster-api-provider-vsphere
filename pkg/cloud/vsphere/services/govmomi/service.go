@@ -18,7 +18,7 @@ package govmomi
 
 import (
 	"encoding/base64"
-
+	
 	"github.com/pkg/errors"
 
 	"github.com/vmware/govmomi/property"
@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/extra"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/net"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/services/govmomi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/util"
 )
 
@@ -112,6 +113,11 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 		return vm, err
 	}
 
+	// NetApp
+	if err := vms.reconcileTags(ctx); err != nil {
+		// Just log the error?
+	}
+
 	vm.State = infrav1.VirtualMachineStateReady
 	return vm, nil
 }
@@ -146,6 +152,12 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 			// remove the MachineRef and set the vm state to notfound
 			ctx.VSphereMachine.Spec.MachineRef = ""
 			vm.State = infrav1.VirtualMachineStateNotFound
+
+			// NetApp
+			if err := vms.deleteTags(ctx); err != nil {
+				// Just log the error
+			}
+
 			return vm, nil
 		}
 	}
@@ -413,4 +425,20 @@ func (vms *VMService) destroyVM(ctx *context.MachineContext) (string, error) {
 	}
 
 	return task.Reference().Value, nil
+}
+
+// NetApp
+func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
+	vm, err := getVMfromMachineRef(ctx)
+	if err != nil {
+		return err
+	}
+	tags.TagNKSMachine(ctx, vm)
+	return nil
+}
+
+// NetApp
+func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
+	tags.CleanupNKSTags(ctx)
+	return nil
 }

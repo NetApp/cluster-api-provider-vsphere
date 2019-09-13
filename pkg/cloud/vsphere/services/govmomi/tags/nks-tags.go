@@ -26,13 +26,13 @@ func TagNKSMachine(ctx *context.MachineContext, vm *object.VirtualMachine) error
 
 	ctx.Logger.V(4).Info("tagging VM with cluster information")
 	if err := tagWithClusterInfo(ctx, tagManager, vm.Reference(), workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		return errors.Wrapf(err, "could not tag VM with cluster information for machine %q: %v", ctx.Machine.Name)
+		return errors.Wrapf(err, "could not tag VM with cluster information for machine %q", ctx.Machine.Name)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("tagging VM as service cluster machine")
 		if err := tagAsServiceCluster(ctx, tagManager, vm.Reference()); err != nil {
-			return errors.Wrapf(err, "could not tag VM as service cluster machine for machine %q: %v", ctx.Machine.Name)
+			return errors.Wrapf(err, "could not tag VM as service cluster machine for machine %q", ctx.Machine.Name)
 		}
 	}
 
@@ -48,13 +48,13 @@ func CleanupNKSTags(ctx *context.MachineContext) error {
 
 	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
 	if err := deleteClusterInfoTagAndCategory(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		return errors.Wrapf(err, "could not clean up cluster information tag and category for cluster %q: %v", ctx.Cluster.Name)
+		return errors.Wrapf(err, "could not clean up cluster information tag and category for cluster %q", ctx.Cluster.Name)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
 		if err := deleteServiceClusterTagAndCategory(ctx, tagManager); err != nil {
-			return errors.Wrapf(err, "could not clean up service cluster tag and category for cluster %q: %v", ctx.Cluster.Name)
+			return errors.Wrapf(err, "could not clean up service cluster tag and category for cluster %q", ctx.Cluster.Name)
 		}
 	}
 

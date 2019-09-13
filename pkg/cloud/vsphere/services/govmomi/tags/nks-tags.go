@@ -196,29 +196,29 @@ func deleteNKSTag(ctx *context.MachineContext, tm *tags.Manager, tag *tags.Tag) 
 		return errors.Wrapf(err, "could not list attached objects for tag with name %s", tag.Name)
 	}
 
-	if len(attachedObjects) == 0 {
-
-		ctx.Logger.V(4).Info("deleting vSphere tag", "tag", tag.Name)
-		err := tm.DeleteTag(ctx, tag)
-		if err != nil {
-			return errors.Wrapf(err, "could not delete tag with name %s")
-		}
-
-		category, err := tm.GetCategory(ctx, tag.CategoryID)
-		if err != nil {
-			return errors.Wrapf(err, "could not get category with ID %s", tag.CategoryID)
-		}
-
-		err = deleteNKSTagCategory(ctx, tm, category)
-		if err != nil {
-			return errors.Wrapf(err, "could not delete category for tag %s with name %s", tag.Name, category.Name)
-		}
-
+	if len(attachedObjects) != 0 {
+		ctx.Logger.V(4).Info("will not delete vSphere tag, still in use", "tag", tag.Name)
 		return nil
 	}
 
-	ctx.Logger.V(4).Info("will not delete vSphere tag, still in use", "tag", tag.Name)
+	ctx.Logger.V(4).Info("deleting vSphere tag", "tag", tag.Name)
+	err = tm.DeleteTag(ctx, tag)
+	if err != nil {
+		return errors.Wrapf(err, "could not delete tag with name %s")
+	}
+
+	category, err := tm.GetCategory(ctx, tag.CategoryID)
+	if err != nil {
+		return errors.Wrapf(err, "could not get category with ID %s", tag.CategoryID)
+	}
+
+	err = deleteNKSTagCategory(ctx, tm, category)
+	if err != nil {
+		return errors.Wrapf(err, "could not delete category for tag %s with name %s", tag.Name, category.Name)
+	}
+
 	return nil
+
 }
 
 // NetApp
@@ -229,15 +229,16 @@ func deleteNKSTagCategory(ctx *context.MachineContext, tm *tags.Manager, categor
 		return errors.Wrapf(err, "could not get tags for category with name %s", category.Name)
 	}
 
-	if len(tagsInCategory) == 0 {
-		ctx.Logger.V(4).Info("deleting vSphere tag category", "category", category.Name)
-		err := tm.DeleteCategory(ctx, category)
-		if err != nil {
-			return errors.Wrapf(err, "could not delete category with name %s", category.Name)
-		}
+	if len(tagsInCategory) != 0 {
+		ctx.Logger.V(4).Info("will not delete vSphere tag category, still in use", "category", category.Name)
 		return nil
 	}
 
-	ctx.Logger.V(4).Info("will not delete vSphere tag category, still in use", "category", category.Name)
+	ctx.Logger.V(4).Info("deleting vSphere tag category", "category", category.Name)
+	err = tm.DeleteCategory(ctx, category)
+	if err != nil {
+		return errors.Wrapf(err, "could not delete category with name %s", category.Name)
+	}
 	return nil
+
 }

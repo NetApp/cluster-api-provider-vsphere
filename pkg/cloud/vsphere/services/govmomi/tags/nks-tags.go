@@ -7,8 +7,6 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/types"
-	"k8s.io/klog"
-
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
 )
 
@@ -21,45 +19,46 @@ const (
 
 // NetApp
 // TagNKSMachine tags the machine with NKS vSphere tags. If the tags do not exist, they are created.
-// This is done in a best-effort manner. In case of errors, simply log and continue
-func TagNKSMachine(ctx *context.MachineContext, vm *object.VirtualMachine) {
+func TagNKSMachine(ctx *context.MachineContext, vm *object.VirtualMachine) error {
 
 	tagManager := tags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("tagging VM with cluster information")
 	if err := tagWithClusterInfo(ctx, tagManager, vm.Reference(), workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		klog.Errorf("could not tag VM with cluster information for machine %q: %v", ctx.Machine.Name, err)
+		return errors.Wrapf(err, "could not tag VM with cluster information for machine %q: %v", ctx.Machine.Name)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("tagging VM as service cluster machine")
 		if err := tagAsServiceCluster(ctx, tagManager, vm.Reference()); err != nil {
-			klog.Errorf("could not tag VM as service cluster machine for machine %q: %v", ctx.Machine.Name, err)
+			return errors.Wrapf(err, "could not tag VM as service cluster machine for machine %q: %v", ctx.Machine.Name)
 		}
 	}
+
+	return nil
 }
 
 // NetApp
 // CleanupNKSTags deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
-// This is done in a best-effort manner. In case of errors, simply log and continue
-func CleanupNKSTags(ctx *context.MachineContext) {
+func CleanupNKSTags(ctx *context.MachineContext) error {
 
 	tagManager := tags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
 	if err := deleteClusterInfoTagAndCategory(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		klog.Errorf("could not clean up cluster information tag and category for cluster %q: %v", ctx.Cluster.Name, err)
+		return errors.Wrapf(err, "could not clean up cluster information tag and category for cluster %q: %v", ctx.Cluster.Name)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
 		if err := deleteServiceClusterTagAndCategory(ctx, tagManager); err != nil {
-			klog.Errorf("could not clean up service cluster tag and category for cluster %q: %v", ctx.Cluster.Name, err)
+			return errors.Wrapf(err, "could not clean up service cluster tag and category for cluster %q: %v", ctx.Cluster.Name)
 		}
 	}
 
+	return nil
 }
 
 // NetApp

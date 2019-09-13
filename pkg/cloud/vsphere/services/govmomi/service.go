@@ -18,7 +18,7 @@ package govmomi
 
 import (
 	"encoding/base64"
-	
+
 	"github.com/pkg/errors"
 
 	"github.com/vmware/govmomi/property"
@@ -115,7 +115,8 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 
 	// NetApp
 	if err := vms.reconcileTags(ctx); err != nil {
-		// Just log the error?
+		// Just log the error
+		ctx.Logger.Error(err, "error reconciling tags")
 	}
 
 	vm.State = infrav1.VirtualMachineStateReady
@@ -156,6 +157,7 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 			// NetApp
 			if err := vms.deleteTags(ctx); err != nil {
 				// Just log the error
+				ctx.Logger.Error(err, "error deleting tags")
 			}
 
 			return vm, nil
@@ -433,12 +435,18 @@ func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
 	if err != nil {
 		return err
 	}
-	tags.TagNKSMachine(ctx, vm)
+	err = tags.TagNKSMachine(ctx, vm)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // NetApp
 func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
-	tags.CleanupNKSTags(ctx)
+	err := tags.CleanupNKSTags(ctx)
+	if err != nil {
+		return err
+	}
 	return nil
 }

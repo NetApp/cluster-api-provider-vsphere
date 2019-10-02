@@ -214,29 +214,60 @@ func getNetworkToNICNameMapper(machine infrav1.VSphereMachine, version metadataV
 	if version != V1 {
 		return nil, nil
 	}
-	primaryNIC, primaryNetwork, err := getPrimaryNICAndNetworkName(machine)
+	nicNetworkInfo, err := getNICNetworkInfo(machine)
 	if err != nil {
 		return nil, err
 	}
 	return func(spec infrav1.NetworkDeviceSpec) (string, error) {
-		if spec.NetworkName == primaryNetwork {
-			return primaryNIC, nil
+		if spec.NetworkName == nicNetworkInfo.primaryNetworkName {
+			return nicNetworkInfo.primaryNICName, nil
+		}
+		if spec.NetworkName == nicNetworkInfo.secondaryNetworkName {
+			return nicNetworkInfo.secondaryNICName, nil
 		}
 		return "", fmt.Errorf("unknown network %q", spec.NetworkName)
 	}, nil
 }
 
 // NetApp
-func getPrimaryNICAndNetworkName(machine infrav1.VSphereMachine) (string, string, error) {
+type nicNetworkInfo struct {
+	primaryNICName       string
+	primaryNetworkName   string
+	secondaryNICName     string
+	secondaryNetworkName string
+}
+
+// NetApp
+func getNICNetworkInfo(machine infrav1.VSphereMachine) (*nicNetworkInfo, error) {
+
 	const primaryNICNameAnnotationKey = "primary-nic-name"
 	const primaryNetworkNameAnnotationKey = "primary-network-name"
+	const secondaryNICNameAnnotationKey = "secondary-nic-name"
+	const secondaryNetworkNameAnnotationKey = "secondary-network-name"
+
 	primaryNICName, ok := machine.Annotations[primaryNICNameAnnotationKey]
 	if !ok {
-		return "", "", fmt.Errorf("primary NIC name annotation missing")
+		return nil, fmt.Errorf("primary NIC name annotation missing")
 	}
 	primaryNetworkName, ok := machine.Annotations[primaryNetworkNameAnnotationKey]
 	if !ok {
-		return "", "", fmt.Errorf("primary network name annotation missing")
+		return nil, fmt.Errorf("primary network name annotation missing")
 	}
-	return primaryNICName, primaryNetworkName, nil
+	secondaryNICName, ok := machine.Annotations[secondaryNICNameAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("secondary NIC name annotation missing")
+	}
+	secondaryNetworkName, ok := machine.Annotations[secondaryNetworkNameAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("secondary network name annotation missing")
+	}
+
+	info := &nicNetworkInfo{
+		primaryNICName:       primaryNICName,
+		primaryNetworkName:   primaryNetworkName,
+		secondaryNICName:     secondaryNICName,
+		secondaryNetworkName: secondaryNetworkName,
+	}
+
+	return info, nil
 }

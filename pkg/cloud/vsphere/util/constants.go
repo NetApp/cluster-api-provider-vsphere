@@ -89,7 +89,7 @@ network:
   config:
     {{- range $i, $net := .Devices }}
     - type: physical
-      name: ens160
+      name: {{ mapNetworkToNICName $net }}
       mac_address: "{{ $net.MACAddr }}" 
       subnets:
 	  {{- if $net.DHCP4 }}

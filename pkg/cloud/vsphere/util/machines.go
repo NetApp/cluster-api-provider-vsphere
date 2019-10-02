@@ -19,6 +19,7 @@ package util
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"text/template"
 
@@ -156,13 +157,19 @@ func GetMachineMetadata(machine infrav1.VSphereMachine, networkStatus ...infrav1
 		}
 	}
 
+	// NetApp
+	// TODO(thorsteinnth) Remove once we handle more than one NIC
+	if len(devices) > 1 {
+		return nil, fmt.Errorf("more than one NIC on machine - unsupported")
+	}
+
 	buf := &bytes.Buffer{}
 	tpl := template.Must(template.New("t").Funcs(
 		template.FuncMap{
 			"nameservers": func(spec infrav1.NetworkDeviceSpec) bool {
 				return len(spec.Nameservers) > 0 || len(spec.SearchDomains) > 0
 			},
-		}).Parse(metadataFormat))
+		}).Parse(metadataFormatV1)) // NetApp
 	if err := tpl.Execute(buf, struct {
 		Hostname string
 		Devices  []infrav1.NetworkDeviceSpec

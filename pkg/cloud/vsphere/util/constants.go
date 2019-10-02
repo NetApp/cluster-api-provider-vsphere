@@ -77,3 +77,38 @@ network:
   {{- end }}
   {{- end }}
 `
+
+// NetApp
+// TODO(thorsteinnth) Handle more networking configuration options - or see if we can trust v2 being parsed into ENI configuration
+// TODO(thorsteinnth) Handle more NICs - remove hardcoding of NIC name, where to get it from?
+const metadataFormatV1 = `
+instance-id: "{{ .Hostname }}"
+local-hostname: "{{ .Hostname }}"
+network:
+  version: 1
+  config:
+    {{- range $i, $net := .Devices }}
+    - type: physical
+      name: ens160
+      mac_address: "{{ $net.MACAddr }}" 
+      subnets:
+	  {{- if $net.DHCP4 }}
+        - type: dhcp4
+      {{- end }}
+      {{- if $net.IPAddrs }}
+      {{- range $net.IPAddrs }}
+        - type: static
+          address: "{{ . }}"
+          {{- if $net.Gateway4 }}
+          gateway: "{{ $net.Gateway4 }}"
+          {{- end }}
+          {{- if nameservers $net }}
+          dns_nameservers:
+            {{- range $net.Nameservers }}
+              - "{{ . }}"
+            {{- end }}
+          {{- end }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+`

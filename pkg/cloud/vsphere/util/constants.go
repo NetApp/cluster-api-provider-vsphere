@@ -79,7 +79,7 @@ network:
 `
 
 // NetApp
-// TODO(thorsteinnth) Handle more networking configuration options - or see if we can trust v2 being parsed into ENI configuration
+// TODO(thorsteinnth) Handle more networking configuration options
 const metadataFormatV1 = `
 instance-id: "{{ .Hostname }}"
 local-hostname: "{{ .Hostname }}"
@@ -88,7 +88,7 @@ network:
   config:
     {{- range $i, $net := .Devices }}
     - type: physical
-      name: {{ mapNetworkToNICName $net }}
+      name: id{{ $i }}
       mac_address: "{{ $net.MACAddr }}" 
       subnets:
 	  {{- if $net.DHCP4 }}

@@ -19,7 +19,6 @@ package util
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net"
 	"text/template"
 
@@ -158,18 +157,14 @@ func GetMachineMetadata(machine infrav1.VSphereMachine, networkStatus ...infrav1
 	}
 
 	// NetApp
-	templateVersion, metadataTemplate := getVersionedMetadataTemplate(machine)
-	networkToNICMapper, err := getNetworkToNICNameMapper(machine, templateVersion)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error getting network to NIC mapper")
-	}
+	metadataTemplate := getVersionedMetadataTemplate(machine)
 
 	buf := &bytes.Buffer{}
 	tpl := template.Must(template.New("t").Funcs(
 		template.FuncMap{
 			"nameservers": func(spec infrav1.NetworkDeviceSpec) bool {
 				return len(spec.Nameservers) > 0 || len(spec.SearchDomains) > 0
-			}, "mapNetworkToNICName": networkToNICMapper, // NetApp
+			},
 		}).Parse(metadataTemplate)) // NetApp
 	if err := tpl.Execute(buf, struct {
 		Hostname string
@@ -189,85 +184,15 @@ func GetMachineMetadata(machine infrav1.VSphereMachine, networkStatus ...infrav1
 }
 
 // NetApp
-type metadataVersion string
-
-const V1 metadataVersion = "v1"
-const V2 metadataVersion = "v2"
-
-// NetApp
-func getVersionedMetadataTemplate(machine infrav1.VSphereMachine) (metadataVersion, string) {
+func getVersionedMetadataTemplate(machine infrav1.VSphereMachine) string {
 	const networkConfigVersionAnnotationKey = "network-config-version"
 	networkConfigVersion, ok := machine.Annotations[networkConfigVersionAnnotationKey]
 	if ok && networkConfigVersion == "v1" {
-		return V1, metadataFormatV1
+		return metadataFormatV1
 	}
 	if ok && networkConfigVersion == "v2" {
-		return V2, metadataFormat
+		return metadataFormat
 	}
-	// Default to v2
-	return V2, metadataFormat
-}
-
-// NetApp
-func getNetworkToNICNameMapper(machine infrav1.VSphereMachine, version metadataVersion) (func(spec infrav1.NetworkDeviceSpec) (string, error), error) {
-	// Only applies to networking configuration V1
-	if version != V1 {
-		return nil, nil
-	}
-	nicNetworkInfo, err := getNICNetworkInfo(machine)
-	if err != nil {
-		return nil, err
-	}
-	return func(spec infrav1.NetworkDeviceSpec) (string, error) {
-		if spec.NetworkName == nicNetworkInfo.primaryNetworkName {
-			return nicNetworkInfo.primaryNICName, nil
-		}
-		if spec.NetworkName == nicNetworkInfo.secondaryNetworkName {
-			return nicNetworkInfo.secondaryNICName, nil
-		}
-		return "", fmt.Errorf("unknown network %q", spec.NetworkName)
-	}, nil
-}
-
-// NetApp
-type nicNetworkInfo struct {
-	primaryNICName       string
-	primaryNetworkName   string
-	secondaryNICName     string
-	secondaryNetworkName string
-}
-
-// NetApp
-func getNICNetworkInfo(machine infrav1.VSphereMachine) (*nicNetworkInfo, error) {
-
-	const primaryNICNameAnnotationKey = "primary-nic-name"
-	const primaryNetworkNameAnnotationKey = "primary-network-name"
-	const secondaryNICNameAnnotationKey = "secondary-nic-name"
-	const secondaryNetworkNameAnnotationKey = "secondary-network-name"
-
-	primaryNICName, ok := machine.Annotations[primaryNICNameAnnotationKey]
-	if !ok {
-		return nil, fmt.Errorf("primary NIC name annotation missing")
-	}
-	primaryNetworkName, ok := machine.Annotations[primaryNetworkNameAnnotationKey]
-	if !ok {
-		return nil, fmt.Errorf("primary network name annotation missing")
-	}
-	secondaryNICName, ok := machine.Annotations[secondaryNICNameAnnotationKey]
-	if !ok {
-		return nil, fmt.Errorf("secondary NIC name annotation missing")
-	}
-	secondaryNetworkName, ok := machine.Annotations[secondaryNetworkNameAnnotationKey]
-	if !ok {
-		return nil, fmt.Errorf("secondary network name annotation missing")
-	}
-
-	info := &nicNetworkInfo{
-		primaryNICName:       primaryNICName,
-		primaryNetworkName:   primaryNetworkName,
-		secondaryNICName:     secondaryNICName,
-		secondaryNetworkName: secondaryNetworkName,
-	}
-
-	return info, nil
+	// Default to v1
+	return metadataFormatV1
 }

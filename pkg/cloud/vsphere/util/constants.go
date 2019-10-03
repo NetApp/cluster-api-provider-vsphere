@@ -80,7 +80,6 @@ network:
 
 // NetApp
 // TODO(thorsteinnth) Handle more networking configuration options - or see if we can trust v2 being parsed into ENI configuration
-// TODO(thorsteinnth) Handle more NICs - remove hardcoding of NIC name, where to get it from?
 const metadataFormatV1 = `
 instance-id: "{{ .Hostname }}"
 local-hostname: "{{ .Hostname }}"

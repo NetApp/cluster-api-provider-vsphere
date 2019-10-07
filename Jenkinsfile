@@ -21,7 +21,7 @@ pipeline {
     stage('generate'){
       steps {
         container('golang') {
-          dir('${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere') {
+          dir("${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere") {
             checkout scm
             sh('go generate ./pkg/... ./cmd/...')
           }
@@ -32,7 +32,7 @@ pipeline {
     stage('manifests'){
       steps {
         container('golang') {
-          dir('${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere') {
+          dir("${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere") {
             sh('go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all')
           }
         }

@@ -13,7 +13,7 @@ pipeline {
     APP_NAME   = 'cluster-api-provider-vsphere'
     REPOSITORY = "${ORG}/${APP_NAME}"
     GO111MODULE = 'off'
-    GOPATH = '${WORKSPACE}/go'
+    GOPATH = "${WORKSPACE}/go"
   }
 
   stages {

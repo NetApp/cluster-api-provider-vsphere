@@ -62,9 +62,15 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	if _, err := vsphereutils.GetIP(cluster, machine); err != nil {
 		klog.V(4).Info("actuator.Update() - did not find IP, waiting on IP")
 		vm := object.NewVirtualMachine(s.session.Client, vmref)
-		var vmIP string
+
 		// NetApp
-		vmIP, err := WaitForNetworkIP(updatectx, vm, true, "NetApp HCI VDS 01-HCI_Internal_NKS_Workload")
+		primaryNetworkName, err := getPrimaryNetworkName(machine)
+		if err != nil {
+			return err
+		}
+
+		// NetApp
+		vmIP, err := WaitForNetworkIP(updatectx, vm, true, primaryNetworkName)
 		if err != nil {
 			return err
 		}
@@ -73,6 +79,16 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 		return pv.updateIP(cluster, machine, vmIP)
 	}
 	return nil
+}
+
+// NetApp
+func getPrimaryNetworkName(machine *clusterv1.Machine) (string, error) {
+	const primaryNetworkAnnotationKey = "primary-network-name"
+	networkName, ok := machine.Annotations[primaryNetworkAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("primary network annotation missing on machine %q", machine.Name)
+	}
+	return networkName, nil
 }
 
 // Updates the detected IP for the machine and updates the cluster object signifying a change in the infrastructure

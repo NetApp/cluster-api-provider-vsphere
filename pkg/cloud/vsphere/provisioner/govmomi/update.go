@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vmware/govmomi/vapi/tags"
+	"strings"
 	"time"
 
 	"github.com/vmware/govmomi/object"
@@ -88,7 +89,13 @@ func getPrimaryNetworkName(machine *clusterv1.Machine) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("primary network annotation missing on machine %q", machine.Name)
 	}
-	return networkName, nil
+	return stripResourcePath(networkName), nil
+}
+
+// NetApp
+func stripResourcePath(resourceWithPath string) string {
+	splitResource := strings.Split(resourceWithPath, "/")
+	return splitResource[len(splitResource)-1]
 }
 
 // Updates the detected IP for the machine and updates the cluster object signifying a change in the infrastructure

@@ -13,7 +13,7 @@ pipeline {
     APP_NAME   = 'cluster-api-provider-vsphere'
     REPOSITORY = "${ORG}/${APP_NAME}"
     GO111MODULE = 'off'
-    GOPATH = '/home/jenkins/go'
+    GOPATH = "${WORKSPACE}/go"
   }
 
   stages {
@@ -21,7 +21,7 @@ pipeline {
     stage('generate'){
       steps {
         container('golang') {
-          dir('/home/jenkins/go/src/github.com/NetApp/cluster-api-provider-vsphere') {
+          dir("${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere") {
             checkout scm
             sh('go generate ./pkg/... ./cmd/...')
           }
@@ -32,7 +32,7 @@ pipeline {
     stage('manifests'){
       steps {
         container('golang') {
-          dir('/home/jenkins/go/src/github.com/NetApp/cluster-api-provider-vsphere') {
+          dir("${GOPATH}/src/github.com/NetApp/cluster-api-provider-vsphere") {
             sh('go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all')
           }
         }
@@ -86,6 +86,27 @@ pipeline {
             docker.withRegistry("https://${DOCKER_REGISTRY}", "gcr:${ORG}") {
               image.push("netapp-${GIT_COMMIT_SHORT}")
               image.push("netapp")
+            }
+          }
+        }
+      }
+    }
+
+    stage('publish: release') {
+      when {
+        branch 'release-*'
+      }
+      environment {
+        GIT_COMMIT_SHORT = sh(
+                script: "printf \$(git rev-parse --short ${GIT_COMMIT})",
+                returnStdout: true
+        ).trim()
+      }
+      steps {
+        container('builder-base') {
+          script {
+            docker.withRegistry("https://${DOCKER_REGISTRY}", "gcr:${ORG}") {
+              image.push("netapp-${GIT_COMMIT_SHORT}")
             }
           }
         }

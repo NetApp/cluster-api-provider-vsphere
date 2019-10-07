@@ -1,9 +1,14 @@
 package govmomi
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
+	"github.com/vmware/govmomi/vim25/types"
 	"io/ioutil"
+	"net"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -238,9 +243,9 @@ func (pv *Provisioner) GetVsphereCredentials(cluster *clusterv1.Cluster) (string
 // NetApp
 func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
 
-	const ClusterIdLabel     = "hci.nks.netapp.com/cluster"
-	const WorkspaceIdLabel   = "hci.nks.netapp.com/workspace"
-	const ClusterRoleLabel   = "hci.nks.netapp.com/role"
+	const ClusterIdLabel = "hci.nks.netapp.com/cluster"
+	const WorkspaceIdLabel = "hci.nks.netapp.com/workspace"
+	const ClusterRoleLabel = "hci.nks.netapp.com/role"
 	const ServiceClusterRole = "service-cluster"
 
 	var workspaceID = ""
@@ -260,4 +265,105 @@ func getNKSClusterInfo(cluster *clusterv1.Cluster) (string, string, bool) {
 	}
 
 	return clusterID, workspaceID, isServiceCluster
+}
+
+// NetApp
+// Wait for an IP address on the given network
+func WaitForNetworkIP(ctx context.Context, v *object.VirtualMachine, v4 bool, network string) (string, error) {
+	macs := make(map[string][]string) // macToIP map
+	macToNetworkMap := make(map[string]string)
+	networkToMACMap := make(map[string]string)
+
+	p := property.DefaultCollector(v.Common.Client())
+
+	// Wait for all NICs to have a MAC address, which may not be generated yet.
+	err := property.Wait(ctx, p, v.Reference(), []string{"config.hardware.device"}, func(pc []types.PropertyChange) bool {
+		for _, c := range pc {
+			if c.Op != types.PropertyChangeOpAssign {
+				continue
+			}
+
+			devices := object.VirtualDeviceList(c.Val.(types.ArrayOfVirtualDevice).VirtualDevice)
+			for _, d := range devices {
+				if nic, ok := d.(types.BaseVirtualEthernetCard); ok {
+					mac := nic.GetVirtualEthernetCard().MacAddress
+					if mac == "" {
+						return false
+					}
+					macs[mac] = nil
+				}
+			}
+		}
+
+		return true
+	})
+
+	err = property.Wait(ctx, p, v.Reference(), []string{"guest.net"}, func(pc []types.PropertyChange) bool {
+
+		// Collect IP addresses for the NICs
+		for _, c := range pc {
+			if c.Op != types.PropertyChangeOpAssign {
+				continue
+			}
+			nics := c.Val.(types.ArrayOfGuestNicInfo).GuestNicInfo
+			for _, nic := range nics {
+				mac := nic.MacAddress
+				if mac == "" || nic.IpConfig == nil {
+					continue
+				}
+
+				macToNetworkMap[mac] = nic.Network
+				networkToMACMap[nic.Network] = mac
+
+				for _, ip := range nic.IpConfig.IpAddress {
+					if _, ok := macs[mac]; !ok {
+						continue // Ignore any that don't correspond to a VM device
+					}
+					if v4 && net.ParseIP(ip.IpAddress).To4() == nil {
+						continue // Ignore non IPv4 address
+					}
+					macs[mac] = append(macs[mac], ip.IpAddress)
+				}
+			}
+		}
+
+		// Wait for the network we want
+		for mac, ips := range macs {
+
+			networkName, ok := macToNetworkMap[mac]
+			if !ok {
+				continue
+			}
+
+			if networkName != network {
+				continue
+			}
+
+			if len(ips) > 0 {
+				return true
+			}
+		}
+
+		return false
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	macAddr, ok := networkToMACMap[network]
+	if !ok {
+		return "", fmt.Errorf("mac address for network %q not found", network)
+	}
+
+	ipAddrs, ok := macs[macAddr]
+	if !ok {
+		return "", fmt.Errorf("ip addresses for MAC %q not found", macAddr)
+	}
+
+	if len(ipAddrs) == 0 {
+		return "", fmt.Errorf("ip address for network %q not found", network)
+	}
+
+	return ipAddrs[0], nil
 }

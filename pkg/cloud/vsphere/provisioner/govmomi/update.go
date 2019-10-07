@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vmware/govmomi/vapi/tags"
+	"strings"
 	"time"
 
 	"github.com/vmware/govmomi/object"
@@ -62,24 +63,39 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 	if _, err := vsphereutils.GetIP(cluster, machine); err != nil {
 		klog.V(4).Info("actuator.Update() - did not find IP, waiting on IP")
 		vm := object.NewVirtualMachine(s.session.Client, vmref)
-		var vmIP string
-		macToIPMap, err := vm.WaitForNetIP(updatectx, true, "ethernet-0")
+
+		// NetApp
+		primaryNetworkName, err := getPrimaryNetworkName(machine)
 		if err != nil {
 			return err
 		}
 
-		// macToIPMap will contain only one MAC address, the one for ethernet-0
-		// Return the first (and only) IPv4 address found
-		for _, ips := range macToIPMap {
-			for _, ip := range ips {
-				vmIP = ip
-			}
+		// NetApp
+		vmIP, err := WaitForNetworkIP(updatectx, vm, true, primaryNetworkName)
+		if err != nil {
+			return err
 		}
 
 		pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "IP Detected", "IP %s detected for Virtual Machine %s", vmIP, vm.Name())
 		return pv.updateIP(cluster, machine, vmIP)
 	}
 	return nil
+}
+
+// NetApp
+func getPrimaryNetworkName(machine *clusterv1.Machine) (string, error) {
+	const primaryNetworkAnnotationKey = "primary-network-name"
+	networkName, ok := machine.Annotations[primaryNetworkAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("primary network annotation missing on machine %q", machine.Name)
+	}
+	return stripResourcePath(networkName), nil
+}
+
+// NetApp
+func stripResourcePath(resourceWithPath string) string {
+	splitResource := strings.Split(resourceWithPath, "/")
+	return splitResource[len(splitResource)-1]
 }
 
 // Updates the detected IP for the machine and updates the cluster object signifying a change in the infrastructure

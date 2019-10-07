@@ -63,17 +63,10 @@ func (pv *Provisioner) Update(ctx context.Context, cluster *clusterv1.Cluster, m
 		klog.V(4).Info("actuator.Update() - did not find IP, waiting on IP")
 		vm := object.NewVirtualMachine(s.session.Client, vmref)
 		var vmIP string
-		macToIPMap, err := vm.WaitForNetIP(updatectx, true, "ethernet-0")
+		// NetApp
+		vmIP, err := WaitForNetworkIP(updatectx, vm, true, "NetApp HCI VDS 01-HCI_Internal_NKS_Workload")
 		if err != nil {
 			return err
-		}
-
-		// macToIPMap will contain only one MAC address, the one for ethernet-0
-		// Return the first (and only) IPv4 address found
-		for _, ips := range macToIPMap {
-			for _, ip := range ips {
-				vmIP = ip
-			}
 		}
 
 		pv.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "IP Detected", "IP %s detected for Virtual Machine %s", vmIP, vm.Name())

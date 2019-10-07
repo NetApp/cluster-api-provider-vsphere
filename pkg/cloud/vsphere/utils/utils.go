@@ -47,7 +47,7 @@ func GetIP(_ *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	if machine.ObjectMeta.Annotations == nil {
 		return "", errors.New("could not get IP")
 	}
-	if ip, ok := machine.ObjectMeta.Annotations[constants.VmIpAnnotationKey]; ok {
+	if ip, ok := machine.ObjectMeta.Annotations[constants.VmIpAnnotationKey]; ok && ip != "" { // NetApp
 		return ip, nil
 	}
 	return "", errors.New("could not get IP")

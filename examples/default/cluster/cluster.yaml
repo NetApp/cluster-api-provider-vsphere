@@ -26,6 +26,7 @@ spec:
     global:
       secretName: "cloud-provider-vsphere-credentials"
       secretNamespace: "kube-system"
+      insecure: true
     virtualCenter:
       "${VSPHERE_SERVER}":
         datacenters: "${VSPHERE_DATACENTER}"
@@ -38,4 +39,11 @@ spec:
       resourcePool: "${VSPHERE_RESOURCE_POOL}"
       folder: "${VSPHERE_FOLDER}"
     providerConfig:
-      image: "gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.0.0"
+      cloud:
+        controllerImage: "gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.0.0"
+      storage:
+        controllerImage: "vmware/vsphere-block-csi-driver:v1.0.0"
+        nodeDriverImage: "vmware/vsphere-block-csi-driver:v1.0.0"
+        attacherImage: "quay.io/k8scsi/csi-attacher:v1.1.1"
+        provisionerImage: "quay.io/k8scsi/csi-provisioner:v1.2.1"
+        metadataSyncerImage: "vmware/volume-metadata-syncer:v1.0.0"

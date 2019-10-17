@@ -18,6 +18,7 @@ package govmomi
 
 import (
 	"encoding/base64"
+	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
 
 	"github.com/pkg/errors"
 
@@ -99,6 +100,11 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 
 	if err := vms.reconcileNetworkStatus(ctx, &vm); err != nil {
 		return vm, nil
+	}
+
+	// NetApp
+	if ok, err := vms.reconcileIPAM(ctx, vm); err != nil || !ok {
+		return vm, err
 	}
 
 	if ok, err := vms.reconcileMetadata(ctx, vm); err != nil || !ok {
@@ -449,4 +455,69 @@ func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
 		return err
 	}
 	return nil
+}
+
+func (vms *VMService) reconcileIPAM(ctx *context.MachineContext, vm infrav1.VirtualMachine) (bool, error) {
+
+	// Find all network devices that should get a static IP
+	staticDevices := make([]infrav1.NetworkDeviceSpec, 0)
+	for idx, device := range ctx.VSphereMachine.Spec.Network.Devices {
+		if !device.DHCP4 && !device.DHCP6 {
+			staticDevices = append(staticDevices, ctx.VSphereMachine.Spec.Network.Devices[idx])
+		}
+	}
+
+	// If no static devices then nothing to do
+	if len(staticDevices) == 0 {
+		return true, nil
+	}
+
+	staticDevicesWithoutIPs := make([]infrav1.NetworkDeviceSpec, 0)
+	for idx, device := range staticDevices {
+		if len(device.IPAddrs) == 0 {
+			staticDevicesWithoutIPs = append(staticDevicesWithoutIPs, staticDevices[idx])
+		}
+	}
+
+	// If all static devices already have an IP then nothing to do
+	if len(staticDevicesWithoutIPs) == 0 {
+		return true, nil
+	}
+
+	macAddresses := make([]string, 0)
+	for idx := range vm.Network {
+		mac := vm.Network[idx].MACAddr
+		if mac != "" {
+			macAddresses = append(macAddresses, mac)
+		}
+	}
+
+	if len(staticDevicesWithoutIPs) > len(macAddresses) {
+		ctx.Logger.V(6).Info("reenqueue to wait for mac addresses") // TODO Needed? Or am I guararnteed to have the mac addresses at this point
+		return false, nil
+	}
+
+	staticMacAddresses := macAddresses[0:len(staticDevicesWithoutIPs)]
+
+	agent, err := util.GetIPAMAgent(ctx.Logger, ctx.Client)
+	if err != nil {
+		return false, errors.Wrap(err, "could not get IPAM agent")
+	}
+
+	reservations, err := agent.ReserveIPs(ipam.Workload, ipam.IPv4, len(staticMacAddresses), staticMacAddresses)
+	if err != nil {
+		return false, errors.Wrap(err, "could not reserve IPs")
+	}
+
+	for idx := range staticDevicesWithoutIPs {
+		reservation := reservations[idx] // TODO Actually match on mac addresses here - add macs earlier
+		staticDevicesWithoutIPs[idx].IPAddrs = append(staticDevicesWithoutIPs[idx].IPAddrs, reservation.Address)
+		staticDevicesWithoutIPs[idx].Nameservers = reservation.NetworkConfig.NameServers
+		staticDevicesWithoutIPs[idx].Gateway4 = reservation.NetworkConfig.DefaultGateway
+		staticDevicesWithoutIPs[idx].SearchDomains = reservation.NetworkConfig.DomainSearch
+	}
+
+	ctx.VSphereMachine.Spec.Network.Devices = staticDevicesWithoutIPs
+
+	return true, nil
 }

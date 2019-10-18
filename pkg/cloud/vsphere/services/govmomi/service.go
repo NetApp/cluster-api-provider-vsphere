@@ -18,6 +18,7 @@ package govmomi
 
 import (
 	"encoding/base64"
+	"fmt"
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
 
 	"github.com/pkg/errors"
@@ -459,6 +460,11 @@ func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
 
 func (vms *VMService) reconcileIPAM(ctx *context.MachineContext, vm infrav1.VirtualMachine) (bool, error) {
 
+	if ctx.VSphereMachine == nil {
+		ctx.Logger.V(4).Info("machine infrastructure missing")
+		return false, nil
+	}
+
 	// Create a copy of the devices
 	devices := make([]infrav1.NetworkDeviceSpec, len(ctx.VSphereMachine.Spec.Network.Devices))
 	for i := range ctx.VSphereMachine.Spec.Network.Devices {
@@ -468,7 +474,7 @@ func (vms *VMService) reconcileIPAM(ctx *context.MachineContext, vm infrav1.Virt
 	// Find all devices that should get a static IP
 	staticDevicesWithoutIPs := make([]*infrav1.NetworkDeviceSpec, 0)
 	for i, device := range devices {
-		if !device.DHCP4 && len(device.IPAddrs) == 0 { // TODO Handle DHCP4 only - have to count only dhcp4
+		if !device.DHCP4 && !device.DHCP6 && len(device.IPAddrs) == 0 {
 			staticDevicesWithoutIPs = append(staticDevicesWithoutIPs, &devices[i])
 		}
 	}
@@ -499,29 +505,69 @@ func (vms *VMService) reconcileIPAM(ctx *context.MachineContext, vm infrav1.Virt
 
 	//staticMacAddresses := macAddresses[0:len(staticDevicesWithoutIPs)]
 
+	// Determine zone
+	if ctx.VSphereCluster == nil {
+		ctx.Logger.V(4).Info("cluster infrastructure missing")
+		return false, nil
+	}
+	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == util.ManagementZoneName
+
+	// Determine network types for each device
+	networkTypeDeviceMap := make(map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec)
+	for i := range staticDevicesWithoutIPs {
+		networkType, err := util.GetNetworkType(*ctx.VSphereMachine, isManagementZone, staticDevicesWithoutIPs[i].NetworkName)
+		if err != nil {
+			return false, errors.Wrapf(err, "could not get network type")
+		}
+		networkTypeDeviceMap[networkType] = append(networkTypeDeviceMap[networkType], staticDevicesWithoutIPs[i])
+	}
+
 	agent, err := util.GetIPAMAgent(ctx.Logger, ctx.Client)
 	if err != nil {
 		return false, errors.Wrap(err, "could not get IPAM agent")
 	}
 
-	// TODO Skipping the MAC address linking for now
-	// TODO Get IPs from the correct pool for each device
-	// TODO Release IPs
-	reservations, err := agent.ReserveIPs(ipam.Workload, ipam.IPv4, len(staticDevicesWithoutIPs), nil)
-	if err != nil {
-		return false, errors.Wrap(err, "could not reserve IPs")
+	for networkType, networkTypeDevices := range networkTypeDeviceMap {
+		// TODO Skipping the MAC address linking for now
+		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), nil)
+		if err != nil {
+			return false, errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
+		}
+		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
+			// Let's try to release the reservations
+			ips := getReservationIPs(reservations)
+			if err := agent.ReleaseIPs(networkType, ips); err != nil {
+				ctx.Logger.Error(err, "failed to assign IP reservations, could not release IPs", "IPs", ips)
+			}
+			return false, errors.Wrap(err, "could not assign IP reservations to devices")
+		}
+		// Assign the modified devices
+		ctx.VSphereMachine.Spec.Network.Devices = devices
+		// Add annotation marking machine as IPAM managed
+		ctx.VSphereMachine.Annotations[util.IPAMManagedAnnotationKey] = "true"
 	}
-
-	for i := range staticDevicesWithoutIPs {
-		reservation := reservations[i]
-		staticDevicesWithoutIPs[i].IPAddrs = append(staticDevicesWithoutIPs[i].IPAddrs, reservation.Address)
-		staticDevicesWithoutIPs[i].Nameservers = reservation.NetworkConfig.NameServers
-		staticDevicesWithoutIPs[i].Gateway4 = reservation.NetworkConfig.DefaultGateway
-		staticDevicesWithoutIPs[i].SearchDomains = reservation.NetworkConfig.DomainSearch
-	}
-
-	// Assign the modified devices
-	ctx.VSphereMachine.Spec.Network.Devices = devices
 
 	return true, nil
+}
+
+func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devices []*infrav1.NetworkDeviceSpec) error {
+	if len(reservations) != len(devices) {
+		return fmt.Errorf("unexpected number of reservations %d, wanted %d", len(reservations), len(devices))
+	}
+	for i := range devices {
+		reservation := reservations[i]
+		devices[i].IPAddrs = append(devices[i].IPAddrs, reservation.Address)
+		devices[i].Nameservers = reservation.NetworkConfig.NameServers
+		devices[i].Gateway4 = reservation.NetworkConfig.DefaultGateway
+		devices[i].SearchDomains = reservation.NetworkConfig.DomainSearch
+	}
+	return nil
+}
+
+func getReservationIPs(reservations []ipam.IPAddressReservation) []string {
+	ips := make([]string, 0)
+	for _, res := range reservations {
+		ips = append(ips, res.Address)
+	}
+	return ips
 }

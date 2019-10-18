@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -16,6 +17,12 @@ const (
 	dhcp           provider = "DHCP"
 	mNodeIPService provider = "MNodeIPService"
 	infoblox       provider = "Infoblox"
+
+	primaryNetworkNameAnnotationKey = "primary-network-name"
+	storageNetworkNameAnnotationKey = "storage-network-name"
+
+	ManagementZoneName       = "management"
+	IPAMManagedAnnotationKey = "ipam-managed"
 )
 
 type provider string
@@ -30,6 +37,29 @@ type mNodeConfig struct {
 	IP          string `json:"ip,omitempty"`
 	AuthHostURL string `json:"authHostURL,omitempty"`
 	AuthSecret  string `json:"authSecret,omitempty"`
+}
+
+func GetNetworkType(machine infrav1.VSphereMachine, managementZone bool, networkName string) (ipam.NetworkType, error) {
+	primaryNetworkName, ok := machine.Annotations[primaryNetworkNameAnnotationKey]
+	if !ok {
+		return ipam.Workload, fmt.Errorf("primary network name annotation missing")
+
+	}
+	storageNetworkName, ok := machine.Annotations[storageNetworkNameAnnotationKey]
+	if !ok {
+		return ipam.Workload, fmt.Errorf("storage network name annotation missing")
+
+	}
+	if networkName == primaryNetworkName {
+		if managementZone {
+			return ipam.Management, nil
+		}
+		return ipam.Workload, nil
+	}
+	if networkName == storageNetworkName {
+		return ipam.Data, nil
+	}
+	return ipam.Workload, fmt.Errorf("unknown network type for network %q", networkName)
 }
 
 func GetIPAMAgent(logger logr.Logger, c client.Client) (ipam.Agent, error) {

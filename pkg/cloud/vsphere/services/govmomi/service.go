@@ -459,65 +459,69 @@ func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
 
 func (vms *VMService) reconcileIPAM(ctx *context.MachineContext, vm infrav1.VirtualMachine) (bool, error) {
 
-	// Find all network devices that should get a static IP
-	staticDevices := make([]infrav1.NetworkDeviceSpec, 0)
-	for idx, device := range ctx.VSphereMachine.Spec.Network.Devices {
-		if !device.DHCP4 && !device.DHCP6 {
-			staticDevices = append(staticDevices, ctx.VSphereMachine.Spec.Network.Devices[idx])
+	// Create a copy of the devices
+	devices := make([]infrav1.NetworkDeviceSpec, len(ctx.VSphereMachine.Spec.Network.Devices))
+	for i := range ctx.VSphereMachine.Spec.Network.Devices {
+		ctx.VSphereMachine.Spec.Network.Devices[i].DeepCopyInto(&devices[i])
+	}
+
+	// Find all devices that should get a static IP
+	staticDevicesWithoutIPs := make([]*infrav1.NetworkDeviceSpec, 0)
+	for i, device := range devices {
+		if !device.DHCP4 && len(device.IPAddrs) == 0 { // TODO Handle DHCP4 only - have to count only dhcp4
+			staticDevicesWithoutIPs = append(staticDevicesWithoutIPs, &devices[i])
 		}
 	}
 
-	// If no static devices then nothing to do
-	if len(staticDevices) == 0 {
-		return true, nil
-	}
-
-	staticDevicesWithoutIPs := make([]infrav1.NetworkDeviceSpec, 0)
-	for idx, device := range staticDevices {
-		if len(device.IPAddrs) == 0 {
-			staticDevicesWithoutIPs = append(staticDevicesWithoutIPs, staticDevices[idx])
-		}
-	}
-
-	// If all static devices already have an IP then nothing to do
+	// If no static devices need IPs then nothing to do
 	if len(staticDevicesWithoutIPs) == 0 {
 		return true, nil
 	}
 
-	macAddresses := make([]string, 0)
-	for idx := range vm.Network {
-		mac := vm.Network[idx].MACAddr
-		if mac != "" {
-			macAddresses = append(macAddresses, mac)
+	// TODO(thorsteinnth) Should we be doing the ip<->mac linking?
+	// If we do, then we need to add the MAC address to the device spec, making it static, so that on re-clone
+	// the machine comes up with the same mac address - preserving the ip<->mac link in the IPAM provider
+	// At that point, are we guaranteed that it will remain unique, and that we do not need some "MAC address management service"?
+	// i.e. can we mix generated MACs and static MACs in the same environment.
+
+	/*
+		// Assign MAC addresses to the static devices
+		// NOTE: These MAC addresses should have been generated for us at this point, since the VM has already been cloned.
+		// We add the MAC addresses explicitly to the spec here, so that on eventual VM deletion from vSphere and re-clone,
+		// the MAC addresses will stay the same.
+		if len(vm.Network) != len(devices) {
+			ctx.Logger.V(6).Info("reenqueue to wait for network status") // TODO Needed?
+			return false, nil
 		}
-	}
+		for i := range devices {
+			devices[i].MACAddr = vm.Network[i].MACAddr
+		}*/
 
-	if len(staticDevicesWithoutIPs) > len(macAddresses) {
-		ctx.Logger.V(6).Info("reenqueue to wait for mac addresses") // TODO Needed? Or am I guararnteed to have the mac addresses at this point
-		return false, nil
-	}
-
-	staticMacAddresses := macAddresses[0:len(staticDevicesWithoutIPs)]
+	//staticMacAddresses := macAddresses[0:len(staticDevicesWithoutIPs)]
 
 	agent, err := util.GetIPAMAgent(ctx.Logger, ctx.Client)
 	if err != nil {
 		return false, errors.Wrap(err, "could not get IPAM agent")
 	}
 
-	reservations, err := agent.ReserveIPs(ipam.Workload, ipam.IPv4, len(staticMacAddresses), staticMacAddresses)
+	// TODO Skipping the MAC address linking for now
+	// TODO Get IPs from the correct pool for each device
+	// TODO Release IPs
+	reservations, err := agent.ReserveIPs(ipam.Workload, ipam.IPv4, len(staticDevicesWithoutIPs), nil)
 	if err != nil {
 		return false, errors.Wrap(err, "could not reserve IPs")
 	}
 
-	for idx := range staticDevicesWithoutIPs {
-		reservation := reservations[idx] // TODO Actually match on mac addresses here - add macs earlier
-		staticDevicesWithoutIPs[idx].IPAddrs = append(staticDevicesWithoutIPs[idx].IPAddrs, reservation.Address)
-		staticDevicesWithoutIPs[idx].Nameservers = reservation.NetworkConfig.NameServers
-		staticDevicesWithoutIPs[idx].Gateway4 = reservation.NetworkConfig.DefaultGateway
-		staticDevicesWithoutIPs[idx].SearchDomains = reservation.NetworkConfig.DomainSearch
+	for i := range staticDevicesWithoutIPs {
+		reservation := reservations[i]
+		staticDevicesWithoutIPs[i].IPAddrs = append(staticDevicesWithoutIPs[i].IPAddrs, reservation.Address)
+		staticDevicesWithoutIPs[i].Nameservers = reservation.NetworkConfig.NameServers
+		staticDevicesWithoutIPs[i].Gateway4 = reservation.NetworkConfig.DefaultGateway
+		staticDevicesWithoutIPs[i].SearchDomains = reservation.NetworkConfig.DomainSearch
 	}
 
-	ctx.VSphereMachine.Spec.Network.Devices = staticDevicesWithoutIPs
+	// Assign the modified devices
+	ctx.VSphereMachine.Spec.Network.Devices = devices
 
 	return true, nil
 }

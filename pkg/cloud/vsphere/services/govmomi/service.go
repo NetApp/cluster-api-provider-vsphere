@@ -18,6 +18,7 @@ package govmomi
 
 import (
 	"encoding/base64"
+
 	"github.com/pkg/errors"
 
 	"github.com/vmware/govmomi/property"

@@ -91,11 +91,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		val, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
 		if ok {
 			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
-				// Let's try to release the reservations
-				ips := getReservationIPs(reservations)
-				if err := agent.ReleaseIPs(networkType, ips); err != nil {
-					ctx.Logger.Error(err, "failed to unmarshal IPAM state annotation, could not release IPs", "IPs", ips)
-				}
+				cleanupReservations(ctx, agent, networkType, reservations)
 				return errors.Wrap(err, "failed to unmarshal IPAM state annotation")
 			}
 		}
@@ -107,11 +103,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		}
 		marshalled, err := json.Marshal(networkTypeToIPs)
 		if err != nil {
-			// Let's try to release the reservations
-			ips := getReservationIPs(reservations)
-			if err := agent.ReleaseIPs(networkType, ips); err != nil {
-				ctx.Logger.Error(err, "failed to marshal IPAM state annotation, could not release IPs", "IPs", ips)
-			}
+			cleanupReservations(ctx, agent, networkType, reservations)
 			return errors.Wrap(err, "failed to marshal IPAM state annotation")
 		}
 		ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = string(marshalled)
@@ -119,11 +111,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		// Assign to devices
 
 		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
-			// Let's try to release the reservations
-			ips := getReservationIPs(reservations)
-			if err := agent.ReleaseIPs(networkType, ips); err != nil {
-				ctx.Logger.Error(err, "failed to assign IP reservations, could not release IPs", "IPs", ips)
-			}
+			cleanupReservations(ctx, agent, networkType, reservations)
 			return errors.Wrap(err, "could not assign IP reservations to devices")
 		}
 		// Assign the modified devices
@@ -181,6 +169,13 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 	}
 
 	return nil
+}
+
+func cleanupReservations(ctx *capvcontext.MachineContext, agent ipam.Agent, networkType ipam.NetworkType, reservations []ipam.IPAddressReservation) {
+	ips := getReservationIPs(reservations)
+	if err := agent.ReleaseIPs(networkType, ips); err != nil {
+		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IPs", ips)
+	}
 }
 
 func getNetworkType(machine infrav1.VSphereMachine, managementZone bool, networkName string) (ipam.NetworkType, error) {

@@ -178,12 +178,8 @@ func (r *VSphereMachineReconciler) reconcileDelete(ctx *context.MachineContext) 
 
 	// NetApp
 	var ipamService = &ipam.IPAMService{}
-	if ok, err := ipamService.ReleaseIPAM(ctx); !ok {
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		ctx.Logger.V(6).Info("requeuing operation until IPAM configuration is reconciled")
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+	if err := ipamService.ReleaseIPAM(ctx); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// The VM is deleted so remove the finalizer.
@@ -217,12 +213,8 @@ func (r *VSphereMachineReconciler) reconcileNormal(ctx *context.MachineContext) 
 
 	// NetApp
 	var ipamService = &ipam.IPAMService{}
-	if ok, err := ipamService.ReconcileIPAM(ctx); !ok {
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		ctx.Logger.V(6).Info("requeuing operation until IPAM configuration is reconciled")
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+	if err := ipamService.ReconcileIPAM(ctx); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// TODO(akutz) Implement selection of VM service based on vSphere version

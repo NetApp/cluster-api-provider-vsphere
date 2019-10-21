@@ -94,8 +94,27 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		}
 		// Assign the modified devices
 		ctx.VSphereMachine.Spec.Network.Devices = devices
-		// Add annotation marking machine as IPAM managed
-		ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = "true"
+		// Update IPAM annotation
+		networkTypeToIPs := make(map[string][]string)
+		val, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
+		if ok {
+			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
+				// TODO What to do here?
+				ctx.Logger.Error(err, "failed to unmarshal IPAM state annotation")
+			}
+		}
+		networkTypeIPs, ok := networkTypeToIPs[string(networkType)]
+		if ok {
+			networkTypeToIPs[string(networkType)] = append(networkTypeIPs, getReservationIPs(reservations)...)
+		} else {
+			networkTypeToIPs[string(networkType)] = getReservationIPs(reservations)
+		}
+		marshalled, err := json.Marshal(networkTypeToIPs)
+		if err != nil {
+			// TODO What to do here?
+			ctx.Logger.Error(err, "failed to marshal IPAM state annotation")
+		}
+		ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = string(marshalled)
 	}
 
 	return nil
@@ -108,33 +127,19 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 	}
 
 	// If this machine is not IPAM managed we can bail early
-	ipamManaged, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
-	if !ok || ipamManaged != "true" {
+	val, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
+	if !ok {
 		return nil
 	}
 
-	// Create a copy of the devices
-	devices := make([]infrav1.NetworkDeviceSpec, len(ctx.VSphereMachine.Spec.Network.Devices))
-	for i := range ctx.VSphereMachine.Spec.Network.Devices {
-		ctx.VSphereMachine.Spec.Network.Devices[i].DeepCopyInto(&devices[i])
+	networkTypeToIPs := make(map[string][]string)
+	if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
+		return errors.Wrap(err, "failed to unmarshal IPAM state annotation")
 	}
 
-	// Find all devices that should have their IPs released
-	staticDevicesWithIPs := make([]*infrav1.NetworkDeviceSpec, 0)
-	for i, device := range devices {
-		if !device.DHCP4 && !device.DHCP6 && len(device.IPAddrs) > 0 {
-			staticDevicesWithIPs = append(staticDevicesWithIPs, &devices[i])
-		}
-	}
-
-	// If no static devices with IPs then nothing to do
-	if len(staticDevicesWithIPs) == 0 {
+	if len(networkTypeToIPs) == 0 {
+		// Nothing to do
 		return nil
-	}
-
-	networkTypeDeviceMap, err := getNetworkTypeDeviceMap(ctx, staticDevicesWithIPs)
-	if err != nil {
-		return errors.Wrap(err, "could not get network types for devices")
 	}
 
 	agent, err := getIPAMAgent(ctx.Logger, ctx.Client)
@@ -142,22 +147,25 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get IPAM agent")
 	}
 
-	// TODO Should I fish the IPs from the devices, or be more explicit with annotations?
-	// I need to mark the addresses as deleted I think - otherwise if I fail along the way I will try to delete them all,
-	// also those that were previously deleted already - not idempotent
-	for networkType, networkTypeDevices := range networkTypeDeviceMap {
-		ips := make([]string, 0)
-		for i := range networkTypeDevices {
-			ips = append(ips, networkTypeDevices[i].IPAddrs...)
+	for netType, ips := range networkTypeToIPs {
+		networkType, err := mapNetworkType(netType)
+		if err != nil {
+			return errors.Wrapf(err, "could not map network type")
 		}
 		if len(ips) > 0 {
-			err := agent.ReleaseIPs(networkType, ips)
-			if err != nil {
-				return errors.Wrap(err, "could not release IPs")
+			if err := agent.ReleaseIPs(networkType, ips); err != nil {
+				return errors.Wrapf(err, "could not release IPs: %s", ips)
 			}
 			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IPs", ips)
 		}
+		delete(networkTypeToIPs, netType)
 	}
+
+	marshalled, err := json.Marshal(networkTypeToIPs)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal IPAM state annotation")
+	}
+	ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = string(marshalled)
 
 	return nil
 }
@@ -183,6 +191,19 @@ func getNetworkType(machine infrav1.VSphereMachine, managementZone bool, network
 		return ipam.Data, nil
 	}
 	return ipam.Workload, fmt.Errorf("unknown network type for network %q", networkName)
+}
+
+func mapNetworkType(networkType string) (ipam.NetworkType, error) {
+	if networkType == string(ipam.Management) {
+		return ipam.Management, nil
+	}
+	if networkType == string(ipam.Workload) {
+		return ipam.Workload, nil
+	}
+	if networkType == string(ipam.Data) {
+		return ipam.Data, nil
+	}
+	return ipam.Workload, fmt.Errorf("unknown network type %q", networkType)
 }
 
 func getIPAMAgent(logger logr.Logger, c client.Client) (ipam.Agent, error) {

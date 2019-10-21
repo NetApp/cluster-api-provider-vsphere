@@ -83,7 +83,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
 		}
-		ctx.Logger.Info("Reserved IPs for network type %s: %s", string(networkType), reservations)
+		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "reservations", reservations)
 		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
 			// Let's try to release the reservations
 			ips := getReservationIPs(reservations)
@@ -155,7 +155,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 			if err != nil {
 				return errors.Wrap(err, "could not release IPs")
 			}
-			ctx.Logger.Info("Released IPs for network type %s: %s", string(networkType), ips)
+			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IPs", ips)
 		}
 	}
 

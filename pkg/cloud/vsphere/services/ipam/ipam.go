@@ -278,8 +278,7 @@ func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1
 
 	// Determine zone
 	if ctx.VSphereCluster == nil {
-		ctx.Logger.V(4).Info("cluster infrastructure missing")
-		return nil, fmt.Errorf("cluster infrastructure missing for machine %q in namespace %q", ctx.VSphereMachine.Name, ctx.VSphereMachine.Namespace)
+		return nil, fmt.Errorf("cluster infrastructure missing")
 	}
 
 	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == ManagementZoneName

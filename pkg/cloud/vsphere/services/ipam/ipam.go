@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam/mnode"
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
@@ -22,8 +21,13 @@ const (
 	primaryNetworkNameAnnotationKey = "primary-network-name"
 	storageNetworkNameAnnotationKey = "storage-network-name"
 
-	ManagementZoneName       = "management"
-	IPAMManagedAnnotationKey = "ipam-managed"
+	ipamConfigSecretNameKey      = "ipam-config-secret-name"
+	ipamConfigSecretNamespaceKey = "ipam-config-secret-namespace"
+	ipamConfigSecretKey          = "config.json"
+
+	ipamManagedAnnotationKey = "ipam-managed"
+
+	managementZoneName = "management"
 )
 
 type provider string
@@ -72,7 +76,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get network types for devices")
 	}
 
-	agent, err := getIPAMAgent(ctx.Logger, ctx.Client)
+	agent, err := getIPAMAgent(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get IPAM agent")
 	}
@@ -88,7 +92,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		// Update IPAM annotation
 
 		networkTypeToIPs := make(map[string][]string)
-		val, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
+		val, ok := ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey]
 		if ok {
 			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
 				cleanupReservations(ctx, agent, networkType, reservations)
@@ -106,13 +110,13 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 			cleanupReservations(ctx, agent, networkType, reservations)
 			return errors.Wrap(err, "failed to marshal IPAM state annotation")
 		}
-		ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = string(marshalled)
+		ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = string(marshalled)
 
 		// Assign to devices
 
 		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
 			cleanupReservations(ctx, agent, networkType, reservations)
-			ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = val // Revert annotation
+			ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = val // Revert annotation
 			return errors.Wrap(err, "could not assign IP reservations to devices")
 		}
 		// Assign the modified devices
@@ -130,7 +134,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 	}
 
 	// If this machine is not IPAM managed we can bail early
-	val, ok := ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey]
+	val, ok := ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey]
 	if !ok {
 		return nil
 	}
@@ -145,7 +149,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return nil
 	}
 
-	agent, err := getIPAMAgent(ctx.Logger, ctx.Client)
+	agent, err := getIPAMAgent(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get IPAM agent")
 	}
@@ -166,7 +170,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal IPAM state annotation")
 		}
-		ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = string(marshalled)
+		ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = string(marshalled)
 	}
 
 	return nil
@@ -223,7 +227,7 @@ func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1
 		return nil, fmt.Errorf("cluster infrastructure missing")
 	}
 
-	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == ManagementZoneName
+	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == managementZoneName
 
 	// Determine network types for each device
 	networkTypeDeviceMap := make(map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec)
@@ -260,9 +264,9 @@ func getReservationIPs(reservations []ipam.IPAddressReservation) []string {
 	return ips
 }
 
-func getIPAMAgent(logger logr.Logger, c client.Client) (ipam.Agent, error) {
+func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 
-	cfg, err := getIPAMConfiguration(logger, c)
+	cfg, err := getIPAMConfiguration(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get IPAM config")
 	}
@@ -303,25 +307,33 @@ func getMNodeIPAMAgent(cfg *mNodeConfig) (mnode.IPAMAgent, error) {
 	return agent, nil
 }
 
-func getIPAMConfiguration(logger logr.Logger, c client.Client) (*ipamConfig, error) {
+func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) {
 
-	// TODO Have it in each cluster's namespace? Or at least configurable through annotations
-	const secretNamespace = "nks-system"
-	const secretName = "ipam-config"
-	const key = "config.json"
+	if ctx.Cluster == nil {
+		return nil, fmt.Errorf("cluster context is nil")
+	}
 
-	logger.V(4).Info("Fetching IPAM configuration from secret", "secret-namespace", secretNamespace, "secret-name", secretName)
+	secretName, ok := ctx.Cluster.Annotations[ipamConfigSecretNameKey]
+	if !ok {
+		return nil, fmt.Errorf("ipam config secret name annotation missing")
+	}
+	secretNamespace, ok := ctx.Cluster.Annotations[ipamConfigSecretNamespaceKey]
+	if !ok {
+		return nil, fmt.Errorf("ipam config secret namespace annotation missing")
+	}
+
+	ctx.Logger.V(4).Info("Fetching IPAM configuration from secret", "secret-namespace", secretNamespace, "secret-name", secretName)
 
 	ipamSecret := &apiv1.Secret{}
 	ipamSecretKey := client.ObjectKey{
 		Namespace: secretNamespace,
 		Name:      secretName,
 	}
-	if err := c.Get(context.TODO(), ipamSecretKey, ipamSecret); err != nil {
+	if err := ctx.Client.Get(context.TODO(), ipamSecretKey, ipamSecret); err != nil {
 		return nil, errors.Wrapf(err, "error getting IPAM config secret %s in namespace %s", secretName, secretNamespace)
 	}
 
-	configBytes, ok := ipamSecret.Data[key]
+	configBytes, ok := ipamSecret.Data[ipamConfigSecretKey]
 	if !ok {
 		return nil, fmt.Errorf("IPAM config missing from secret %s in namespace %s", secretName, secretNamespace)
 	}

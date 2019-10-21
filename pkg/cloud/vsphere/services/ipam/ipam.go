@@ -21,9 +21,9 @@ const (
 	primaryNetworkNameAnnotationKey = "primary-network-name"
 	storageNetworkNameAnnotationKey = "storage-network-name"
 
-	ipamConfigSecretNameKey      = "ipam-config-secret-name"
-	ipamConfigSecretNamespaceKey = "ipam-config-secret-namespace"
-	ipamConfigSecretKey          = "config.json"
+	ipamConfigSecretNameAnnotationKey      = "ipam-config-secret-name"
+	ipamConfigSecretNamespaceAnnotationKey = "ipam-config-secret-namespace"
+	ipamConfigSecretKey                    = "config.json"
 
 	ipamManagedAnnotationKey = "ipam-managed"
 
@@ -313,11 +313,11 @@ func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) 
 		return nil, fmt.Errorf("cluster context is nil")
 	}
 
-	secretName, ok := ctx.Cluster.Annotations[ipamConfigSecretNameKey]
+	secretName, ok := ctx.Cluster.Annotations[ipamConfigSecretNameAnnotationKey]
 	if !ok {
 		return nil, fmt.Errorf("ipam config secret name annotation missing")
 	}
-	secretNamespace, ok := ctx.Cluster.Annotations[ipamConfigSecretNamespaceKey]
+	secretNamespace, ok := ctx.Cluster.Annotations[ipamConfigSecretNamespaceAnnotationKey]
 	if !ok {
 		return nil, fmt.Errorf("ipam config secret namespace annotation missing")
 	}

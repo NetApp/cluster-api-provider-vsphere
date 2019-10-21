@@ -83,7 +83,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
 		}
-		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "reservations", reservations)
+		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "IPs", getReservationIPs(reservations))
 
 		// Update IPAM annotation
 
@@ -112,6 +112,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
 			cleanupReservations(ctx, agent, networkType, reservations)
+			ctx.VSphereMachine.Annotations[IPAMManagedAnnotationKey] = val // Revert annotation
 			return errors.Wrap(err, "could not assign IP reservations to devices")
 		}
 		// Assign the modified devices
@@ -173,6 +174,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 
 func cleanupReservations(ctx *capvcontext.MachineContext, agent ipam.Agent, networkType ipam.NetworkType, reservations []ipam.IPAddressReservation) {
 	ips := getReservationIPs(reservations)
+	ctx.Logger.Info("Cleaning up IP reservations", "networkType", string(networkType), "IPs", ips)
 	if err := agent.ReleaseIPs(networkType, ips); err != nil {
 		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IPs", ips)
 	}

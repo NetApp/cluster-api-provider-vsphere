@@ -18,9 +18,6 @@ package govmomi
 
 import (
 	"encoding/base64"
-	"fmt"
-	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
-
 	"github.com/pkg/errors"
 
 	"github.com/vmware/govmomi/property"
@@ -101,11 +98,6 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 
 	if err := vms.reconcileNetworkStatus(ctx, &vm); err != nil {
 		return vm, nil
-	}
-
-	// NetApp
-	if ok, err := vms.reconcileIPAM(ctx, vm); err != nil || !ok {
-		return vm, err
 	}
 
 	if ok, err := vms.reconcileMetadata(ctx, vm); err != nil || !ok {

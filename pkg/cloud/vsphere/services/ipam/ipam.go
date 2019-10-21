@@ -42,7 +42,7 @@ type mNodeConfig struct {
 
 type IPAMService struct{}
 
-func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext, vm infrav1.VirtualMachine) (bool, error) {
+func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) (bool, error) {
 
 	if ctx.VSphereMachine == nil {
 		ctx.Logger.V(4).Info("machine infrastructure missing")

@@ -38,7 +38,6 @@ type ipamConfig struct {
 }
 
 type mNodeConfig struct {
-	Provider    string `json:"provider,omitempty"`
 	IP          string `json:"ip,omitempty"`
 	AuthHostURL string `json:"authHostURL,omitempty"`
 	AuthSecret  string `json:"authSecret,omitempty"`

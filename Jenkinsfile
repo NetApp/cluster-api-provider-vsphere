@@ -34,9 +34,8 @@ pipeline {
       steps {
         container('builder-base') {
           // We need to provide a personal access token to fetch private dependencies
-          sh 'git config --global url."https://oauth2:${GITHUB_TOKEN}@github.com".insteadOf "https://github.com"'
           script {
-            image = docker.build("${REPOSITORY}")
+            image = docker.build("${REPOSITORY}", "--build-arg GITHUB_TOKEN=${GITHUB_TOKEN} .")
           }
         }
       }

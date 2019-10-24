@@ -270,20 +270,17 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 		return nil, errors.Wrap(err, "could not get IPAM config")
 	}
 
-	if cfg.Provider == dhcp {
+	switch cfg.Provider {
+	case dhcp:
 		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
-	}
-
-	if cfg.Provider == infoblox {
+	case infoblox:
 		// TODO Implement
 		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
-	}
-
-	if cfg.Provider == mNodeIPService {
+	case mNodeIPService:
 		return getMNodeIPAMAgent(cfg.MNodeConfig)
+	default:
+		return nil, fmt.Errorf("unknown IPAM provider %s", string(cfg.Provider))
 	}
-
-	return nil, fmt.Errorf("unknown IPAM provider %s", cfg.Provider)
 }
 
 func getMNodeIPAMAgent(cfg *mNodeConfig) (mnode.IPAMAgent, error) {

@@ -33,7 +33,7 @@ const (
 type provider string
 
 type ipamConfig struct {
-	Provider    string `json:"provider,omitempty"`
+	Provider    provider `json:"provider,omitempty"`
 	MNodeConfig *mNodeConfig
 }
 
@@ -245,12 +245,12 @@ func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devic
 	if len(reservations) != len(devices) {
 		return fmt.Errorf("unexpected number of reservations %d, wanted %d", len(reservations), len(devices))
 	}
-	for i := range devices {
+	for i, device := range devices {
 		reservation := reservations[i]
-		devices[i].IPAddrs = append(devices[i].IPAddrs, reservation.Address)
-		devices[i].Nameservers = reservation.NetworkConfig.NameServers
-		devices[i].Gateway4 = reservation.NetworkConfig.DefaultGateway
-		devices[i].SearchDomains = reservation.NetworkConfig.DomainSearch
+		device.IPAddrs = append(device.IPAddrs, reservation.Address)
+		device.Nameservers = reservation.NetworkConfig.NameServers
+		device.Gateway4 = reservation.NetworkConfig.DefaultGateway
+		device.SearchDomains = reservation.NetworkConfig.DomainSearch
 	}
 	return nil
 }
@@ -270,16 +270,16 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 		return nil, errors.Wrap(err, "could not get IPAM config")
 	}
 
-	if cfg.Provider == string(dhcp) {
+	if cfg.Provider == dhcp {
 		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
 	}
 
-	if cfg.Provider == string(infoblox) {
+	if cfg.Provider == infoblox {
 		// TODO Implement
 		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
 	}
 
-	if cfg.Provider == string(mNodeIPService) {
+	if cfg.Provider == mNodeIPService {
 		return getMNodeIPAMAgent(cfg.MNodeConfig)
 	}
 
@@ -344,11 +344,11 @@ func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) 
 	}
 
 	switch cfg.Provider {
-	case string(dhcp):
+	case dhcp:
 		return cfg, nil
-	case string(infoblox):
+	case infoblox:
 		return cfg, nil
-	case string(mNodeIPService):
+	case mNodeIPService:
 		mNodeCfg := &mNodeConfig{}
 		if err := json.Unmarshal(configBytes, mNodeCfg); err != nil {
 			return nil, fmt.Errorf("could not unmarshal mNode IPAM config, %v", err)
@@ -356,6 +356,6 @@ func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) 
 		cfg.MNodeConfig = mNodeCfg
 		return cfg, nil
 	default:
-		return nil, fmt.Errorf("unknown IPAM provider %q", cfg.Provider)
+		return nil, fmt.Errorf("unknown IPAM provider %q", string(cfg.Provider))
 	}
 }

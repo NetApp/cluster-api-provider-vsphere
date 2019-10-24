@@ -16,7 +16,6 @@ import (
 const (
 	dhcp           provider = "DHCP"
 	mNodeIPService provider = "MNodeIPService"
-	infoblox       provider = "Infoblox"
 
 	primaryNetworkNameAnnotationKey = "primary-network-name"
 	storageNetworkNameAnnotationKey = "storage-network-name"
@@ -33,11 +32,11 @@ const (
 type provider string
 
 type ipamConfig struct {
-	Provider    provider `json:"provider,omitempty"`
-	MNodeConfig *mNodeConfig
+	Provider    provider     `json:"provider,omitempty"`
+	MNodeConfig *mnodeConfig `json:"mnodeConfig,omitempty"`
 }
 
-type mNodeConfig struct {
+type mnodeConfig struct {
 	IP          string `json:"ip,omitempty"`
 	AuthHostURL string `json:"authHostURL,omitempty"`
 	AuthSecret  string `json:"authSecret,omitempty"`
@@ -273,9 +272,6 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 	switch cfg.Provider {
 	case dhcp:
 		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
-	case infoblox:
-		// TODO Implement
-		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
 	case mNodeIPService:
 		return getMNodeIPAMAgent(cfg.MNodeConfig)
 	default:
@@ -283,7 +279,7 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 	}
 }
 
-func getMNodeIPAMAgent(cfg *mNodeConfig) (mnode.IPAMAgent, error) {
+func getMNodeIPAMAgent(cfg *mnodeConfig) (mnode.IPAMAgent, error) {
 
 	const basePath = "ip/v1" // TODO(thorsteinnth): This should be configurable
 	agent, err := mnode.NewIPAMAgent(
@@ -340,19 +336,26 @@ func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) 
 		return nil, fmt.Errorf("could not unmarshal IPAM config, %v", err)
 	}
 
+	if err := validateConfig(cfg); err != nil {
+		return nil, errors.Wrap(err, "config validation failure")
+	}
+
+	return cfg, nil
+}
+
+func validateConfig(cfg *ipamConfig) error {
+	if cfg.Provider == "" {
+		return fmt.Errorf("provider missing from config")
+	}
 	switch cfg.Provider {
 	case dhcp:
-		return cfg, nil
-	case infoblox:
-		return cfg, nil
+		return nil
 	case mNodeIPService:
-		mNodeCfg := &mNodeConfig{}
-		if err := json.Unmarshal(configBytes, mNodeCfg); err != nil {
-			return nil, fmt.Errorf("could not unmarshal mNode IPAM config, %v", err)
+		if cfg.MNodeConfig == nil {
+			return fmt.Errorf("mnode config missing")
 		}
-		cfg.MNodeConfig = mNodeCfg
-		return cfg, nil
+		return nil
 	default:
-		return nil, fmt.Errorf("unknown IPAM provider %q", string(cfg.Provider))
+		return fmt.Errorf("unknown IPAM provider %q", string(cfg.Provider))
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
-	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam/mnode"
+	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam/factory"
 	"github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	dhcp           provider = "DHCP"
-	mNodeIPService provider = "MNodeIPService"
-
 	primaryNetworkNameAnnotationKey = "primary-network-name"
 	storageNetworkNameAnnotationKey = "storage-network-name"
 
@@ -28,19 +25,6 @@ const (
 
 	managementZoneName = "management"
 )
-
-type provider string
-
-type ipamConfig struct {
-	Provider    provider     `json:"provider,omitempty"`
-	MNodeConfig *mnodeConfig `json:"mnodeConfig,omitempty"`
-}
-
-type mnodeConfig struct {
-	IP          string `json:"ip,omitempty"`
-	AuthHostURL string `json:"authHostURL,omitempty"`
-	AuthSecret  string `json:"authSecret,omitempty"`
-}
 
 type IPAMService struct{}
 
@@ -76,7 +60,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 	agent, err := getIPAMAgent(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get IPAM agent")
+		return errors.Wrap(err, "could not get ipam agent")
 	}
 
 	for networkType, networkTypeDevices := range networkTypeDeviceMap {
@@ -94,7 +78,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		if ok {
 			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
 				cleanupReservations(ctx, agent, networkType, reservations)
-				return errors.Wrap(err, "failed to unmarshal IPAM state annotation")
+				return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 			}
 		}
 		networkTypeIPs, ok := networkTypeToIPs[string(networkType)]
@@ -106,7 +90,7 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		marshalled, err := json.Marshal(networkTypeToIPs)
 		if err != nil {
 			cleanupReservations(ctx, agent, networkType, reservations)
-			return errors.Wrap(err, "failed to marshal IPAM state annotation")
+			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
 		ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = string(marshalled)
 
@@ -139,7 +123,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 
 	networkTypeToIPs := make(map[string][]string)
 	if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
-		return errors.Wrap(err, "failed to unmarshal IPAM state annotation")
+		return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 	}
 
 	if len(networkTypeToIPs) == 0 {
@@ -149,7 +133,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 
 	agent, err := getIPAMAgent(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get IPAM agent")
+		return errors.Wrap(err, "could not get ipam agent")
 	}
 
 	for netType, ips := range networkTypeToIPs {
@@ -166,7 +150,7 @@ func (svc *IPAMService) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		delete(networkTypeToIPs, netType)
 		marshalled, err := json.Marshal(networkTypeToIPs)
 		if err != nil {
-			return errors.Wrap(err, "failed to marshal IPAM state annotation")
+			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
 		ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = string(marshalled)
 	}
@@ -263,43 +247,21 @@ func getReservationIPs(reservations []ipam.IPAddressReservation) []string {
 }
 
 func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
-
-	cfg, err := getIPAMConfiguration(ctx)
+	cfg, err := loadConfig(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get IPAM config")
+		return nil, errors.Wrapf(err, "could not get ipam config")
 	}
-
-	switch cfg.Provider {
-	case dhcp:
-		return nil, fmt.Errorf("cannot get IPAM agent for provider %s", cfg.Provider)
-	case mNodeIPService:
-		return getMNodeIPAMAgent(cfg.MNodeConfig)
-	default:
-		return nil, fmt.Errorf("unknown IPAM provider %s", string(cfg.Provider))
-	}
-}
-
-func getMNodeIPAMAgent(cfg *mnodeConfig) (mnode.IPAMAgent, error) {
-
-	const basePath = "ip/v1" // TODO(thorsteinnth): This should be configurable
-	agent, err := mnode.NewIPAMAgent(
-		cfg.IP,
-		basePath,
-		cfg.AuthHostURL,
-		cfg.AuthSecret,
-		true)
+	agent, err := factory.GetAgent(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not create mNode IPAM agent, %v", err)
+		return nil, errors.Wrap(err, "could not get ipam agent")
 	}
-
 	if err := agent.HealthCheck(); err != nil {
-		return nil, fmt.Errorf("mNode IPAM agent health check failed: %v", err)
+		return nil, errors.Wrap(err, "ipam agent health check failed")
 	}
-
 	return agent, nil
 }
 
-func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) {
+func loadConfig(ctx *capvcontext.MachineContext) (*ipam.Config, error) {
 
 	if ctx.Cluster == nil {
 		return nil, fmt.Errorf("cluster context is nil")
@@ -322,40 +284,19 @@ func getIPAMConfiguration(ctx *capvcontext.MachineContext) (*ipamConfig, error) 
 		Name:      secretName,
 	}
 	if err := ctx.Client.Get(context.TODO(), ipamSecretKey, ipamSecret); err != nil {
-		return nil, errors.Wrapf(err, "error getting IPAM config secret %s in namespace %s", secretName, secretNamespace)
+		return nil, errors.Wrapf(err, "error getting ipam config secret %s in namespace %s", secretName, secretNamespace)
 	}
 
 	configBytes, ok := ipamSecret.Data[ipamConfigSecretKey]
 	if !ok {
-		return nil, fmt.Errorf("IPAM config missing from secret %s in namespace %s", secretName, secretNamespace)
+		return nil, fmt.Errorf("ipam config missing from secret %s in namespace %s", secretName, secretNamespace)
 	}
 
-	cfg := &ipamConfig{}
+	cfg := &ipam.Config{}
 	err := json.Unmarshal(configBytes, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal IPAM config, %v", err)
-	}
-
-	if err := validateConfig(cfg); err != nil {
-		return nil, errors.Wrap(err, "config validation failure")
+		return nil, fmt.Errorf("could not unmarshal ipam config, %v", err)
 	}
 
 	return cfg, nil
-}
-
-func validateConfig(cfg *ipamConfig) error {
-	if cfg.Provider == "" {
-		return fmt.Errorf("provider missing from config")
-	}
-	switch cfg.Provider {
-	case dhcp:
-		return nil
-	case mNodeIPService:
-		if cfg.MNodeConfig == nil {
-			return fmt.Errorf("mnode config missing")
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown IPAM provider %q", string(cfg.Provider))
-	}
 }

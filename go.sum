@@ -17,10 +17,8 @@ github.com/Azure/go-autorest/logger v0.1.0 h1:ruG4BSDXONFRrZZJ2GUXDiUyVpayPmb1Gn
 github.com/Azure/go-autorest/logger v0.1.0/go.mod h1:oExouG+K6PryycPJfVSxi/koC6LSNgds39diKLz7Vrc=
 github.com/Azure/go-autorest/tracing v0.5.0 h1:TRn4WjSnkcSy5AEG3pnbtFSwNtwzjr4VYyQflFE619k=
 github.com/Azure/go-autorest/tracing v0.5.0/go.mod h1:r/s2XiOKccPW3HrqB+W0TQzfbtp2fGCgRFtBroKn4Dk=
-github.com/NetApp/nks-on-prem-ipam v0.1.3 h1:r6XTbU63c5xeytz/9+4qkQ46DUfChEEpdTNZND/K10E=
-github.com/NetApp/nks-on-prem-ipam v0.1.3/go.mod h1:ZfJJsukCxUTPVF4RnekFnVMz27x8SuU4YlD2jaqCKSU=
-github.com/NetApp/nks-on-prem-ipam v0.1.4-0.20191024232857-3661f4eba646 h1:x+w8UStnktSSDpJktWMb6pho9jZHtTz8BXiz0olfVGk=
-github.com/NetApp/nks-on-prem-ipam v0.1.4-0.20191024232857-3661f4eba646/go.mod h1:ZfJJsukCxUTPVF4RnekFnVMz27x8SuU4YlD2jaqCKSU=
+github.com/NetApp/nks-on-prem-ipam v0.1.4 h1:tQ/+BiRyLp7ns9tf/95EPSdAdrA+0XQTMCa6UknCWvk=
+github.com/NetApp/nks-on-prem-ipam v0.1.4/go.mod h1:ZfJJsukCxUTPVF4RnekFnVMz27x8SuU4YlD2jaqCKSU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/antihax/optional v0.0.0-20180407024304-ca021399b1a6 h1:uZuxRZCz65cG1o6K/xUqImNcYKtmk9ylqaH0itMSvzA=

@@ -295,7 +295,7 @@ func loadConfig(ctx *capvcontext.MachineContext) (*ipam.Config, error) {
 	cfg := &ipam.Config{}
 	err := json.Unmarshal(configBytes, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal ipam config, %v", err)
+		return nil, errors.Wrap(err, "could not unmarshal ipam config")
 	}
 
 	return cfg, nil

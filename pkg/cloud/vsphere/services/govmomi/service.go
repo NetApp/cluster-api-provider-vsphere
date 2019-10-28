@@ -45,7 +45,7 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 
 	// Create a VM object
 	vm := infrav1.VirtualMachine{
-		Name:  ctx.VSphereMachine.Name,
+		Name:  ctx.Machine.Name,
 		State: infrav1.VirtualMachineStatePending,
 	}
 
@@ -57,7 +57,7 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 		}
 
 		if ref != "" {
-			return vm, errors.Errorf("vm with the same Instance UUID already exists %q", ctx.VSphereMachine.Name)
+			return vm, errors.Errorf("vm with the same Instance UUID already exists %q", ctx.Machine.Name)
 		}
 
 		// no VM exits, goahead and create a VM
@@ -127,7 +127,7 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (infrav1.VirtualM
 func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMachine, error) {
 
 	vm := infrav1.VirtualMachine{
-		Name:  ctx.VSphereMachine.Name,
+		Name:  ctx.Machine.Name,
 		State: infrav1.VirtualMachineStatePending,
 	}
 
@@ -142,26 +142,17 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 		return vm, err
 	}
 
-	// check if VM actually exists
-	if ctx.VSphereMachine.Spec.MachineRef != "" {
-		moRefID, err := findVMByInstanceUUID(ctx)
-		if err != nil {
-			return vm, err
-		}
-		if moRefID == "" {
-			// No vm exists
-			// remove the MachineRef and set the vm state to notfound
-			ctx.VSphereMachine.Spec.MachineRef = ""
-			vm.State = infrav1.VirtualMachineStateNotFound
-
-			// NetApp
-			if err := vms.deleteTags(ctx); err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error deleting tags")
-			}
-
-			return vm, nil
-		}
+	// check if the vm existts
+	moRefID, err := findVMByInstanceUUID(ctx)
+	if err != nil {
+		return vm, err
+	}
+	if moRefID == "" {
+		// No vm exists
+		// remove the MachineRef and set the vm state to notfound
+		ctx.VSphereMachine.Spec.MachineRef = ""
+		vm.State = infrav1.VirtualMachineStateNotFound
+		return vm, nil
 	}
 
 	// VM actually exists
@@ -211,7 +202,7 @@ func (vms *VMService) reconcileMetadata(ctx *context.MachineContext, vm infrav1.
 		return false, err
 	}
 
-	newMetadata, err := util.GetMachineMetadata(*ctx.VSphereMachine, vm.Network...)
+	newMetadata, err := util.GetMachineMetadata(ctx.Machine.Name, *ctx.VSphereMachine, vm.Network...)
 	if err != nil {
 		return false, err
 	}

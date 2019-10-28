@@ -174,7 +174,7 @@ func (in *VSphereCluster) DeepCopyObject() runtime.Object {
 func (in *VSphereClusterList) DeepCopyInto(out *VSphereClusterList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]VSphereCluster, len(*in))
@@ -274,7 +274,7 @@ func (in *VSphereMachine) DeepCopyObject() runtime.Object {
 func (in *VSphereMachineList) DeepCopyInto(out *VSphereMachineList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]VSphereMachine, len(*in))
@@ -406,7 +406,7 @@ func (in *VSphereMachineTemplate) DeepCopyObject() runtime.Object {
 func (in *VSphereMachineTemplateList) DeepCopyInto(out *VSphereMachineTemplateList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]VSphereMachineTemplate, len(*in))

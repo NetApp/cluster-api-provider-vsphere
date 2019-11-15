@@ -21,6 +21,8 @@ const (
 	ipamConfigSecretNamespaceAnnotationKey = "ipam-config-secret-namespace"
 	ipamConfigSecretKey                    = "config.json"
 
+	zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
+
 	ipamManagedAnnotationKey = "ipam-managed"
 
 	managementZoneName = "management"
@@ -167,15 +169,10 @@ func cleanupReservations(ctx *capvcontext.MachineContext, agent ipam.Agent, netw
 }
 
 func getNetworkType(machine infrav1.VSphereMachine, managementZone bool, networkName string) (ipam.NetworkType, error) {
+
 	primaryNetworkName, ok := machine.Annotations[primaryNetworkNameAnnotationKey]
 	if !ok {
-		return ipam.Workload, fmt.Errorf("primary network name annotation missing")
-
-	}
-	storageNetworkName, ok := machine.Annotations[storageNetworkNameAnnotationKey]
-	if !ok {
-		return ipam.Workload, fmt.Errorf("storage network name annotation missing")
-
+		return "", fmt.Errorf("primary network name annotation missing")
 	}
 	if networkName == primaryNetworkName {
 		if managementZone {
@@ -183,10 +180,14 @@ func getNetworkType(machine infrav1.VSphereMachine, managementZone bool, network
 		}
 		return ipam.Workload, nil
 	}
-	if networkName == storageNetworkName {
+
+	storageNetworkName, ok := machine.Annotations[storageNetworkNameAnnotationKey]
+	// Storage network is not necessarily present
+	if ok && networkName == storageNetworkName {
 		return ipam.Data, nil
 	}
-	return ipam.Workload, fmt.Errorf("unknown network type for network %q", networkName)
+
+	return "", fmt.Errorf("unknown network type for network %q", networkName)
 }
 
 func mapNetworkType(networkType string) (ipam.NetworkType, error) {
@@ -205,11 +206,11 @@ func mapNetworkType(networkType string) (ipam.NetworkType, error) {
 func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1.NetworkDeviceSpec) (map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec, error) {
 
 	// Determine zone
-	if ctx.VSphereCluster == nil {
-		return nil, fmt.Errorf("cluster infrastructure missing")
+	zoneName, ok := ctx.VSphereMachine.Annotations[zoneNameAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("zone missing from machine")
 	}
-
-	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == managementZoneName
+	isManagementZone := zoneName == managementZoneName
 
 	// Determine network types for each device
 	networkTypeDeviceMap := make(map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec)

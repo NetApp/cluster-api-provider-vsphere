@@ -321,7 +321,7 @@ func loadConfig(ctx *capvcontext.MachineContext) (*ipam.Config, error) {
 func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 
 	// bool isServiceCluster
-	clusterID, workspaceID, _ := ctx.GetNKSClusterInfo()
+	clusterID, workspaceID, _, _ := ctx.GetNKSClusterInfo()
 
 	return map[string]string{
 		IPReservationTypeMetaDataKey: IPReservationTypeNodeIP,

@@ -60,16 +60,13 @@ func (c *MachineContext) GetSession() *session.Session {
 // NetApp
 // GetNKSClusterInfo returns NKS information on the cluster that the machine is a part of
 // Returns clusterID, workspaceID, isServiceCluster
-func (c *MachineContext) GetNKSClusterInfo() (string, string, bool) {
+func (c *MachineContext) GetNKSClusterInfo() (clusterID string, workspaceID string, creator string, isServiceCluster bool) {
 
 	const ClusterIDLabel = "hci.nks.netapp.com/cluster"
 	const WorkspaceIDLabel = "hci.nks.netapp.com/workspace"
 	const ClusterRoleLabel = "hci.nks.netapp.com/role"
+	const CreatorName = "creator"
 	const ServiceClusterRole = "service-cluster"
-
-	var workspaceID = ""
-	var clusterID = ""
-	var isServiceCluster bool
 
 	if val, ok := c.Cluster.Labels[WorkspaceIDLabel]; ok {
 		workspaceID = val
@@ -77,18 +74,21 @@ func (c *MachineContext) GetNKSClusterInfo() (string, string, bool) {
 	if val, ok := c.Cluster.Labels[ClusterIDLabel]; ok {
 		clusterID = val
 	}
+	if val, ok := c.Cluster.Annotations[CreatorName]; ok {
+		creator = val
+	}
 	if val, ok := c.Cluster.Labels[ClusterRoleLabel]; ok {
 		if val == ServiceClusterRole {
 			isServiceCluster = true
 		}
 	}
 
-	return clusterID, workspaceID, isServiceCluster
+	return
 }
 
 // NetApp
 func (c *MachineContext) GetMachineAnnotation() string {
 	// TODO: At this point we do not know if it is a service cluster - need better communication of that
-	clusterID, workspaceID, _ := c.GetNKSClusterInfo()
-	return fmt.Sprintf("VM is part of NKS kubernetes cluster %s with cluster ID %s in workspace with ID %s", c.Cluster.Name, clusterID, workspaceID)
+	clusterID, workspaceID, creator, _ := c.GetNKSClusterInfo()
+	return fmt.Sprintf("VM is part of NKS kubernetes cluster %s with cluster ID %s in workspace with ID %s created by %s", c.Cluster.Name, clusterID, workspaceID, creator)
 }

@@ -135,7 +135,7 @@ func (c *MachineContext) Patch() error {
 
 // NetApp
 // GetNKSClusterInfo returns NKS information on the cluster that the machine is a part of
-// Returns clusterID, workspaceID, isServiceCluster
+// Returns clusterID, workspaceID, creator, isServiceCluster
 func (c *MachineContext) GetNKSClusterInfo() (string, string, string, bool) {
 
 	const ClusterIdLabel = "hci.nks.netapp.com/cluster"

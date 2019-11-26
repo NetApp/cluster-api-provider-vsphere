@@ -36,12 +36,6 @@ type VSphereMachineSpec struct {
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 
-	// This value is set automatically at runtime and should not be set or
-	// modified by users.
-	// MachineRef is used to lookup the VM.
-	// +optional
-	MachineRef string `json:"machineRef,omitempty"`
-
 	// Template is the name, inventory path, or instance UUID of the template
 	// used to clone new machines.
 	Template string `json:"template"`
@@ -74,15 +68,6 @@ type VSphereMachineSpec struct {
 	// machine is cloned.
 	// +optional
 	DiskGiB int32 `json:"diskGiB,omitempty"`
-
-	// TrustedCerts is a list of trusted certificates to add to the machine's VM.
-	// +optional
-	TrustedCerts [][]byte `json:"trustedCerts,omitempty"`
-
-	// NTPServers is a list of NTP servers to use instead of the machine image's
-	// default NTP server list.
-	// +optional
-	NTPServers []string `json:"ntpServers,omitempty"`
 }
 
 // VSphereMachineStatus defines the observed state of VSphereMachine

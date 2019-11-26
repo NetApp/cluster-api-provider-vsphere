@@ -44,10 +44,6 @@ spec:
                 this machine is cloned.
               format: int32
               type: integer
-            machineRef:
-              description: This value is set automatically at runtime and should not
-                be set or modified by users. MachineRef is used to lookup the VM.
-              type: string
             memoryMiB:
               description: MemoryMiB is the size of a virtual machine's memory, in
                 MiB. Defaults to the analogue property value in the template from
@@ -175,12 +171,6 @@ spec:
               required:
               - devices
               type: object
-            ntpServers:
-              description: NTPServers is a list of NTP servers to use instead of the
-                machine image's default NTP server list.
-              items:
-                type: string
-              type: array
             numCPUs:
               description: NumCPUs is the number of virtual processors in a virtual
                 machine. Defaults to the analogue property value in the template from
@@ -201,13 +191,6 @@ spec:
               description: Template is the name, inventory path, or instance UUID
                 of the template used to clone new machines.
               type: string
-            trustedCerts:
-              description: TrustedCerts is a list of trusted certificates to add to
-                the machine's VM.
-              items:
-                format: byte
-                type: string
-              type: array
           required:
           - datacenter
           - network

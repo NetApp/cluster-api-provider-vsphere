@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
@@ -8,6 +9,8 @@ provisioner: kubernetes.io/vsphere-volume
 parameters:
   datastore: ""
 
+=======
+>>>>>>> master
 # Calico Version v3.6
 # https://docs.projectcalico.org/v3.6/release-notes/
 ---

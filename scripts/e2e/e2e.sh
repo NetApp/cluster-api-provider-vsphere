@@ -137,6 +137,15 @@ start_docker() {
    done
 }
 
+install_govc() {
+   GOVC_VERSION=v0.21.0
+   GOVC_PKG_NAME=govc_linux_amd64
+   curl -L -O https://github.com/vmware/govmomi/releases/download/"${GOVC_VERSION}"/"${GOVC_PKG_NAME}".gz
+   gunzip "${GOVC_PKG_NAME}".gz
+   mv "${GOVC_PKG_NAME}" /usr/local/bin/govc
+   chmod +x /usr/local/bin/govc
+}
+
 on_exit() {
   [ "${VM_CREATED}" ] || return 0
   get_bootstrap_vm "${CONTEXT}"
@@ -154,12 +163,15 @@ fi
 
 VERSION=$(git describe --dirty --always 2>/dev/null)
 export VERSION
+<<<<<<< HEAD
 export CAPI_VERSION=v0.2.3
+=======
+export CAPI_VERSION=v0.2.7
+>>>>>>> master
 echo "build vSphere controller version: ${VERSION}"
 echo "using clusterctl version: ${CAPI_VERSION}"
 
-# install_govc
-go get -u github.com/vmware/govmomi/govc
+install_govc
 
 # Push new container images
 # TODO the `-k` flag here is a workaround until we can set GCR_KEY_FILE properly

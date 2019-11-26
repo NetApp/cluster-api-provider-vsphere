@@ -74,7 +74,7 @@ spec:
                         with Reason ServerTimeout indicating a unique name could not
                         be found in the time allotted, and the client should retry
                         (optionally after the time indicated in the Retry-After header).
-                        \n Applied only if Name is not specified. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#idempotency"
+                        \n Applied only if Name is not specified. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#idempotency"
                       type: string
                     labels:
                       additionalProperties:
@@ -159,11 +159,6 @@ spec:
                         from which this machine is cloned.
                       format: int32
                       type: integer
-                    machineRef:
-                      description: This value is set automatically at runtime and
-                        should not be set or modified by users. MachineRef is used
-                        to lookup the VM.
-                      type: string
                     memoryMiB:
                       description: MemoryMiB is the size of a virtual machine's memory,
                         in MiB. Defaults to the analogue property value in the template
@@ -295,12 +290,6 @@ spec:
                       required:
                       - devices
                       type: object
-                    ntpServers:
-                      description: NTPServers is a list of NTP servers to use instead
-                        of the machine image's default NTP server list.
-                      items:
-                        type: string
-                      type: array
                     numCPUs:
                       description: NumCPUs is the number of virtual processors in
                         a virtual machine. Defaults to the analogue property value
@@ -321,13 +310,6 @@ spec:
                       description: Template is the name, inventory path, or instance
                         UUID of the template used to clone new machines.
                       type: string
-                    trustedCerts:
-                      description: TrustedCerts is a list of trusted certificates
-                        to add to the machine's VM.
-                      items:
-                        format: byte
-                        type: string
-                      type: array
                   required:
                   - datacenter
                   - network

@@ -19,7 +19,7 @@ package context
 import (
 	"context"
 	"fmt"
-	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/constants"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/constants"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"

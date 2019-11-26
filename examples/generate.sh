@@ -30,8 +30,8 @@ OVERWRITE=
 CLUSTER_NAME="${CLUSTER_NAME:-capv-mgmt-example}"
 ENV_VAR_REQ=':?required'
 
-CABPK_MANAGER_IMAGE="${CABPK_MANAGER_IMAGE:-us.gcr.io/k8s-artifacts-prod/capi-kubeadm/cluster-api-kubeadm-controller:v0.1.0}"
-CAPI_MANAGER_IMAGE="${CAPI_MANAGER_IMAGE:-us.gcr.io/k8s-artifacts-prod/cluster-api/cluster-api-controller:v0.2.3}"
+CABPK_MANAGER_IMAGE="${CABPK_MANAGER_IMAGE:-us.gcr.io/k8s-artifacts-prod/capi-kubeadm/cluster-api-kubeadm-controller:v0.1.5}"
+CAPI_MANAGER_IMAGE="${CAPI_MANAGER_IMAGE:-us.gcr.io/k8s-artifacts-prod/cluster-api/cluster-api-controller:v0.2.7}"
 CAPV_MANAGER_IMAGE="${CAPV_MANAGER_IMAGE:-gcr.io/cluster-api-provider-vsphere/release/manager:latest}"
 K8S_IMAGE_REPOSITORY="${K8S_IMAGE_REPOSITORY:-k8s.gcr.io}"
 
@@ -65,7 +65,7 @@ FLAGS
 EOF
 }
 
-while getopts ':b:B:c:dfhi:m:M:r:o:p:P:u' opt; do
+while getopts ':b:B:c:dfhi:m:M:r:o:p:P' opt; do
   case "${opt}" in
   b)
     CABPK_MANAGER_IMAGE="${OPTARG}"
@@ -131,6 +131,66 @@ mkdir -p "${OUT_DIR}"
 # Load an envvars.txt file if one is found.
 # shellcheck disable=SC1091
 [ "${DOCKER_ENABLED-}" ] && [ -e "/envvars.txt" ] && source "/envvars.txt"
+
+# Return true if vSphere version is < 6.7U3, false otherwise
+# if govc is not installed, assume 6.7U3 or above
+# NOTE: returns 0 for true and 1 for false
+is_vsphere_pre_67u3() {
+  # check if govc command exists
+  command -v govc >/dev/null 2>&1 || return 1
+
+  export GOVC_URL=${VSPHERE_SERVER}
+  export GOVC_USERNAME=${VSPHERE_USERNAME}
+  export GOVC_PASSWORD=${VSPHERE_PASSWORD}
+  export GOVC_INSECURE=true
+
+  # parse the vSphere version using govc
+  echo "Checking $GOVC_URL for vSphere version"
+
+  local VSPHERE_API_VERSION
+  if ! VSPHERE_API_VERSION=$(govc object.collect -s - content.about.apiVersion); then
+    return "${?}"
+  fi
+
+  echo "Detected vSphere version ${VSPHERE_API_VERSION}"
+
+  # parse semver into bash array
+  read -r -a SEMVER <<< "${VSPHERE_API_VERSION//./ }"
+
+  # sometimes API version doesn't include the patch version, i.e "6.7"
+  if [[ "${#SEMVER[@]}" == 2 ]]; then
+    VSPHERE_MINOR_VERSION=${SEMVER[1]}
+    VSPHERE_PATCH_VERSION=0
+  elif [[ "${#SEMVER[@]}" == 3 ]]; then
+    VSPHERE_MINOR_VERSION=${SEMVER[1]}
+    VSPHERE_PATCH_VERSION=${SEMVER[2]}
+  else
+    # invalid API version, default to >= 6.7U3
+    return 1
+  fi
+
+  # vSphere minor version is less than 7
+  if [[ ${VSPHERE_MINOR_VERSION} -lt 7 ]]; then
+    return 0
+  fi
+
+  # vSphere minor version is 7, but patch is less than 3
+  if [[ ${VSPHERE_MINOR_VERSION} -eq 7 ]] && [[ $VSPHERE_PATCH_VERSION -lt 3 ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+VSPHERE_PRE_67u3_SUPPORT=
+if is_vsphere_pre_67u3; then
+  VSPHERE_PRE_67u3_SUPPORT=1
+fi
+
+# set the src dir to examples/pre-67u3
+if [ -n "${VSPHERE_PRE_67u3_SUPPORT}" ]; then
+  SRC_DIR="${BUILDDIR}"/examples/pre-67u3
+fi
 
 # Export the manager images and log levels for the different providers.
 export CABPK_MANAGER_IMAGE CABPK_MANAGER_LOG_LEVEL
@@ -279,11 +339,15 @@ kustomize build "${SRC_DIR}/machinedeployment" | envsubst >"${MACHINEDEPLOYMENT_
 echo "Generated ${MACHINEDEPLOYMENT_GENERATED_FILE}"
 
 # Generate Cluster API provider components file.
+<<<<<<< HEAD
 kustomize build "github.com/kubernetes-sigs/cluster-api/config/default/?ref=v0.2.3" >"${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
+=======
+kustomize build "github.com/kubernetes-sigs/cluster-api/config/default/?ref=v0.2.7" >"${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
+>>>>>>> master
 echo "Generated ${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
 
 # Generate Kubeadm Bootstrap Provider components file.
-kustomize build "github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/config/default/?ref=v0.1.0" >"${COMPONENTS_KUBEADM_GENERATED_FILE}"
+kustomize build "github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/config/default/?ref=v0.1.5" >"${COMPONENTS_KUBEADM_GENERATED_FILE}"
 echo "Generated ${COMPONENTS_KUBEADM_GENERATED_FILE}"
 
 # Generate VSphere Infrastructure Provider components file.

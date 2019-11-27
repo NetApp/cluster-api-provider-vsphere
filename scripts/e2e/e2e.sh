@@ -163,11 +163,7 @@ fi
 
 VERSION=$(git describe --dirty --always 2>/dev/null)
 export VERSION
-<<<<<<< HEAD
-export CAPI_VERSION=v0.2.3
-=======
 export CAPI_VERSION=v0.2.7
->>>>>>> master
 echo "build vSphere controller version: ${VERSION}"
 echo "using clusterctl version: ${CAPI_VERSION}"
 

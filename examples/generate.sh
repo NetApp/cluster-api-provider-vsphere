@@ -339,11 +339,7 @@ kustomize build "${SRC_DIR}/machinedeployment" | envsubst >"${MACHINEDEPLOYMENT_
 echo "Generated ${MACHINEDEPLOYMENT_GENERATED_FILE}"
 
 # Generate Cluster API provider components file.
-<<<<<<< HEAD
-kustomize build "github.com/kubernetes-sigs/cluster-api/config/default/?ref=v0.2.3" >"${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
-=======
 kustomize build "github.com/kubernetes-sigs/cluster-api/config/default/?ref=v0.2.7" >"${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
->>>>>>> master
 echo "Generated ${COMPONENTS_CLUSTER_API_GENERATED_FILE}"
 
 # Generate Kubeadm Bootstrap Provider components file.

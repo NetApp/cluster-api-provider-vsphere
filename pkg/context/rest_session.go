@@ -1,4 +1,4 @@
-package session
+package context
 
 import (
 	"context"
@@ -30,11 +30,11 @@ func getOrCreateCachedRESTSession(ctx *MachineContext) (*RestSession, error) {
 
 	server := ctx.VSphereCluster.Spec.Server
 	datacenter := ctx.VSphereMachine.Spec.Datacenter
-	sessionKey := server + ctx.User() + datacenter
+	sessionKey := server + ctx.Username + datacenter
 
 	if session, ok := restSessionCache[sessionKey]; ok {
 		if ok := session.IsActive(); ok {
-			ctx.Logger.V(4).Info("using cached vSphere REST client session", "server", server, "user", ctx.User())
+			ctx.Logger.V(4).Info("using cached vSphere REST client session", "server", server, "user", ctx.Username)
 			return &session, nil
 		}
 	}
@@ -53,10 +53,10 @@ func getOrCreateCachedRESTSession(ctx *MachineContext) (*RestSession, error) {
 		return nil, errors.Wrapf(err, "error setting up new vSphere SOAP client")
 	}
 
-	ctx.Logger.V(2).Info("creating new vSphere REST client session", "server", server, "user", ctx.User())
+	ctx.Logger.V(2).Info("creating new vSphere REST client session", "server", server, "user", ctx.Username)
 	restClient := rest.NewClient(vimClient)
-	if err := restClient.Login(ctx, url.UserPassword(ctx.User(), ctx.Pass())); err != nil {
-		return nil, errors.Wrapf(err, "error logging in with REST client for user %q", ctx.User())
+	if err := restClient.Login(ctx, url.UserPassword(ctx.Username, ctx.Password)); err != nil {
+		return nil, errors.Wrapf(err, "error logging in with REST client for user %q", ctx.Username)
 	}
 
 	session := RestSession{Client: restClient}
@@ -65,7 +65,7 @@ func getOrCreateCachedRESTSession(ctx *MachineContext) (*RestSession, error) {
 
 	// Cache the session.
 	restSessionCache[sessionKey] = session
-	ctx.Logger.V(2).Info("cached vSphere REST client session", "server", server, "user", ctx.User())
+	ctx.Logger.V(2).Info("cached vSphere REST client session", "server", server, "user", ctx.Username)
 
 	return &session, nil
 }

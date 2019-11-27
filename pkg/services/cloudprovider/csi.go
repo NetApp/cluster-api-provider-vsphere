@@ -21,11 +21,22 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2/cloudprovider"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
 )
 
 // NOTE: the contents of this file are derived from https://github.com/kubernetes-sigs/vsphere-csi-driver/tree/master/manifests/1.14
+
+const (
+	DefaultCSIControllerImage     = "gcr.io/cloud-provider-vsphere/csi/release/syncer:v1.0.1"
+	DefaultCSINodeDriverImage     = "gcr.io/cloud-provider-vsphere/csi/release/driver:v1.0.1"
+	DefaultCSIAttacherImage       = "quay.io/k8scsi/csi-attacher:v1.1.1"
+	DefaultCSIProvisionerImage    = "quay.io/k8scsi/csi-provisioner:v1.2.1"
+	DefaultCSIMetadataSyncerImage = "gcr.io/cloud-provider-vsphere/csi/release/syncer:v1.0.1"
+	DefaultCSILivenessProbeImage  = "quay.io/k8scsi/livenessprobe:v1.1.0"
+	DefaultCSIRegistrarImage      = "quay.io/k8scsi/csi-node-driver-registrar:v1.1.0"
+)
 
 func CSIControllerServiceAccount() *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
@@ -138,7 +149,7 @@ func CSIDriver() *storagev1beta1.CSIDriver {
 	}
 }
 
-func VSphereCSINodeDaemonSet(storageConfig cloudprovider.StorageConfig) *appsv1.DaemonSet {
+func VSphereCSINodeDaemonSet(storageConfig *cloudprovider.StorageConfig) *appsv1.DaemonSet {
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "vsphere-csi-node",
@@ -161,11 +172,11 @@ func VSphereCSINodeDaemonSet(storageConfig cloudprovider.StorageConfig) *appsv1.
 					},
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork: true,
+					DNSPolicy: corev1.DNSDefault,
 					Containers: []corev1.Container{
-						NodeDriverRegistrarContainer(),
+						NodeDriverRegistrarContainer(storageConfig.RegistrarImage),
 						VSphereCSINodeContainer(storageConfig.NodeDriverImage),
-						LivenessProbeForNodeContainer(),
+						LivenessProbeForNodeContainer(storageConfig.LivenessProbeImage),
 					},
 					Tolerations: []corev1.Toleration{
 						{
@@ -224,10 +235,10 @@ func VSphereCSINodeDaemonSet(storageConfig cloudprovider.StorageConfig) *appsv1.
 	}
 }
 
-func NodeDriverRegistrarContainer() corev1.Container {
+func NodeDriverRegistrarContainer(image string) corev1.Container {
 	return corev1.Container{
 		Name:  "node-driver-registrar",
-		Image: "quay.io/k8scsi/csi-node-driver-registrar:v1.1.0",
+		Image: image,
 		Lifecycle: &corev1.Lifecycle{
 			PreStop: &corev1.Handler{
 				Exec: &corev1.ExecAction{
@@ -292,8 +303,35 @@ func VSphereCSINodeContainer(image string) corev1.Container {
 				Name:  "X_CSI_VSPHERE_CLOUD_CONFIG",
 				Value: "/etc/cloud/csi-vsphere.conf",
 			},
+			{
+				Name: "NODE_NAME",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
 		},
 		Args: []string{"--v=4"},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "healthz",
+				ContainerPort: 9808,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		LivenessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/healthz",
+					Port: intstr.Parse("healthz"),
+				},
+			},
+			InitialDelaySeconds: 10,
+			TimeoutSeconds:      3,
+			PeriodSeconds:       5,
+			FailureThreshold:    3,
+		},
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: boolPtr(true),
 			Capabilities: &corev1.Capabilities{
@@ -323,11 +361,11 @@ func VSphereCSINodeContainer(image string) corev1.Container {
 	}
 }
 
-func LivenessProbeForNodeContainer() corev1.Container {
+func LivenessProbeForNodeContainer(image string) corev1.Container {
 	return corev1.Container{
 		Name:  "liveness-probe",
-		Image: "quay.io/k8scsi/livenessprobe:v1.1.0",
-		Args:  []string{"--csi-address=$(ADDRESS)", "--health-port=9808"},
+		Image: image,
+		Args:  []string{"--csi-address=$(ADDRESS)"},
 		Env: []corev1.EnvVar{
 			{
 				Name:  "ADDRESS",
@@ -343,7 +381,7 @@ func LivenessProbeForNodeContainer() corev1.Container {
 	}
 }
 
-func CSIControllerStatefulSet(storageConfig cloudprovider.StorageConfig) *appsv1.StatefulSet {
+func CSIControllerStatefulSet(storageConfig *cloudprovider.StorageConfig) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "vsphere-csi-controller",
@@ -380,11 +418,11 @@ func CSIControllerStatefulSet(storageConfig cloudprovider.StorageConfig) *appsv1
 							Effect:   corev1.TaintEffectNoSchedule,
 						},
 					},
-					HostNetwork: true,
+					DNSPolicy: corev1.DNSDefault,
 					Containers: []corev1.Container{
 						CSIAttacherContainer(storageConfig.AttacherImage),
 						VSphereCSIControllerContainer(storageConfig.ControllerImage),
-						LivenessProbeForCSIControllerContainer(),
+						LivenessProbeForCSIControllerContainer(storageConfig.LivenessProbeImage),
 						VSphereSyncerContainer(storageConfig.MetadataSyncerImage),
 						CSIProvisionerContainer(storageConfig.ProvisionerImage),
 					},
@@ -446,6 +484,25 @@ func VSphereCSIControllerContainer(image string) corev1.Container {
 		},
 		Args:            []string{"--v=4"},
 		ImagePullPolicy: corev1.PullAlways,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "healthz",
+				ContainerPort: 9808,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		LivenessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/healthz",
+					Port: intstr.Parse("healthz"),
+				},
+			},
+			InitialDelaySeconds: 10,
+			TimeoutSeconds:      3,
+			PeriodSeconds:       5,
+			FailureThreshold:    3,
+		},
 		Env: []corev1.EnvVar{
 			{
 				Name:  "CSI_ENDPOINT",
@@ -474,11 +531,11 @@ func VSphereCSIControllerContainer(image string) corev1.Container {
 	}
 }
 
-func LivenessProbeForCSIControllerContainer() corev1.Container {
+func LivenessProbeForCSIControllerContainer(image string) corev1.Container {
 	return corev1.Container{
 		Name:  "liveness-probe",
-		Image: "quay.io/k8scsi/livenessprobe:v1.1.0",
-		Args:  []string{"--csi-address=$(ADDRESS)", "--health-port=9809"},
+		Image: image,
+		Args:  []string{"--csi-address=$(ADDRESS)"},
 		Env: []corev1.EnvVar{
 			{
 				Name:  "ADDRESS",
@@ -571,8 +628,8 @@ func ConfigForCSI(ctx *context.ClusterContext) *cloudprovider.Config {
 	config.VCenter = map[string]cloudprovider.VCenterConfig{}
 	for name, vcenter := range ctx.VSphereCluster.Spec.CloudProviderConfiguration.VCenter {
 		config.VCenter[name] = cloudprovider.VCenterConfig{
-			Username:    ctx.User(),
-			Password:    ctx.Pass(),
+			Username:    ctx.Username,
+			Password:    ctx.Password,
 			Datacenters: vcenter.Datacenters,
 		}
 	}

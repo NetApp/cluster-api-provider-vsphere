@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/types"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
@@ -19,19 +18,19 @@ const (
 
 // NetApp
 // TagNKSMachine tags the machine with NKS vSphere tags. If the tags do not exist, they are created.
-func TagNKSMachine(ctx *context.MachineContext, vm *object.VirtualMachine) error {
+func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReference) error {
 
 	tagManager := tags.NewManager(ctx.RestSession.Client)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("tagging VM with cluster information")
-	if err := tagWithClusterInfo(ctx, tagManager, vm.Reference(), workspaceID, clusterID, ctx.Cluster.Name); err != nil {
+	if err := tagWithClusterInfo(ctx, tagManager, vmRef, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
 		return errors.Wrapf(err, "could not tag VM with cluster information for machine %q", ctx.Machine.Name)
 	}
 
 	if isServiceCluster {
 		ctx.Logger.V(4).Info("tagging VM as service cluster machine")
-		if err := tagAsServiceCluster(ctx, tagManager, vm.Reference()); err != nil {
+		if err := tagAsServiceCluster(ctx, tagManager, vmRef); err != nil {
 			return errors.Wrapf(err, "could not tag VM as service cluster machine for machine %q", ctx.Machine.Name)
 		}
 	}

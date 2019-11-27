@@ -33,6 +33,7 @@ type MachineContext struct {
 	Machine        *clusterv1.Machine
 	VSphereMachine *infrav1.VSphereMachine
 	Session        *session.Session
+	RestSession    *RestSession // NetApp
 	Logger         logr.Logger
 	PatchHelper    *patch.Helper
 }
@@ -55,4 +56,40 @@ func (c *MachineContext) GetLogger() logr.Logger {
 // GetSession returns this context's session.
 func (c *MachineContext) GetSession() *session.Session {
 	return c.Session
+}
+
+// NetApp
+// GetNKSClusterInfo returns NKS information on the cluster that the machine is a part of
+// Returns clusterID, workspaceID, isServiceCluster
+func (c *MachineContext) GetNKSClusterInfo() (string, string, bool) {
+
+	const ClusterIdLabel = "hci.nks.netapp.com/cluster"
+	const WorkspaceIdLabel = "hci.nks.netapp.com/workspace"
+	const ClusterRoleLabel = "hci.nks.netapp.com/role"
+	const ServiceClusterRole = "service-cluster"
+
+	var workspaceID = ""
+	var clusterID = ""
+	var isServiceCluster bool
+
+	if val, ok := c.Cluster.Labels[WorkspaceIdLabel]; ok {
+		workspaceID = val
+	}
+	if val, ok := c.Cluster.Labels[ClusterIdLabel]; ok {
+		clusterID = val
+	}
+	if val, ok := c.Cluster.Labels[ClusterRoleLabel]; ok {
+		if val == ServiceClusterRole {
+			isServiceCluster = true
+		}
+	}
+
+	return clusterID, workspaceID, isServiceCluster
+}
+
+// NetApp
+func (c *MachineContext) GetMachineAnnotation() string {
+	// TODO: At this point we do not know if it is a service cluster - need better communication of that
+	clusterID, workspaceID, _ := c.GetNKSClusterInfo()
+	return fmt.Sprintf("VM is part of NKS kubernetes cluster %s with cluster ID %s in workspace with ID %s", c.Cluster.Name, clusterID, workspaceID)
 }

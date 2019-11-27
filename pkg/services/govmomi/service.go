@@ -363,11 +363,11 @@ func (vms *VMService) destroyVM(ctx *virtualMachineContext) (string, error) {
 
 // NetApp
 func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
-	vm, err := getVMfromMachineRef(ctx)
+	vmRef, err := findVM(ctx)
 	if err != nil {
 		return err
 	}
-	err = tags.TagNKSMachine(ctx, vm)
+	err = tags.TagNKSMachine(ctx, vmRef)
 	if err != nil {
 		return err
 	}

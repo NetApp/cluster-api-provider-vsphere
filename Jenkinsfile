@@ -43,10 +43,7 @@ pipeline {
 
     stage('publish: dev') {
       when {
-        expression {
-          branch 'PR-*' ||
-          branch 'netapp-update'
-        }
+        branch 'netapp-update'
       }
       environment {
         GIT_COMMIT_SHORT = sh(

@@ -203,7 +203,7 @@ func deleteNKSTag(ctx *context.MachineContext, tm *tags.Manager, tag *tags.Tag) 
 	ctx.Logger.V(4).Info("deleting vSphere tag", "tag", tag.Name)
 	err = tm.DeleteTag(ctx, tag)
 	if err != nil {
-		return errors.Wrapf(err, "could not delete tag with name %s")
+		return errors.Wrapf(err, "could not delete tag with name %s", tag.Name)
 	}
 
 	category, err := tm.GetCategory(ctx, tag.CategoryID)

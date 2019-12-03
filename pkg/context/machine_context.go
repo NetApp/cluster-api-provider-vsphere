@@ -33,7 +33,6 @@ type MachineContext struct {
 	Machine        *clusterv1.Machine
 	VSphereMachine *infrav1.VSphereMachine
 	Session        *session.Session
-	RestSession    *RestSession // NetApp
 	Logger         logr.Logger
 	PatchHelper    *patch.Helper
 }

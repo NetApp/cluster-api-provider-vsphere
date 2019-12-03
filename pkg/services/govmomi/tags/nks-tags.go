@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/vmware/govmomi/vapi/rest"
 	"github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/types"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
@@ -20,7 +21,9 @@ const (
 // TagNKSMachine tags the machine with NKS vSphere tags. If the tags do not exist, they are created.
 func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReference) error {
 
-	tagManager := tags.NewManager(ctx.RestSession.Client)
+	restClient := rest.NewClient(ctx.Session.Client.Client)
+	tagManager := tags.NewManager(restClient)
+
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("tagging VM with cluster information")
@@ -42,7 +45,8 @@ func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReferen
 // CleanupNKSTags deletes vSphere tags and tag categories that may be associated with the machine - if they are not attached to any objects anymore
 func CleanupNKSTags(ctx *context.MachineContext) error {
 
-	tagManager := tags.NewManager(ctx.RestSession.Client)
+	restClient := rest.NewClient(ctx.Session.Client.Client)
+	tagManager := tags.NewManager(restClient)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
 	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)

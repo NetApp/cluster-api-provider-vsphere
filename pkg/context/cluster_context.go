@@ -17,12 +17,17 @@ limitations under the License.
 package context
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
+	apiv1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/constants"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ClusterContext is a Go context used with a CAPI cluster.
@@ -42,4 +47,41 @@ func (c *ClusterContext) String() string {
 // Patch updates the object and its status on the API server.
 func (c *ClusterContext) Patch() error {
 	return c.PatchHelper.Patch(c, c.VSphereCluster)
+}
+
+// NetApp
+func GetVSphereCredentials(logger logr.Logger, c client.Client, cluster *clusterv1.Cluster) (string, string, error) {
+
+	const credentialSecretNameAnnotationKey = "cluster-api-vsphere-credentials-secret-name"
+	secretName, ok := cluster.Annotations[credentialSecretNameAnnotationKey]
+	if !ok {
+		return "", "", fmt.Errorf("vSphere credential secret name annotation missing")
+	}
+	if secretName == "" {
+		return "", "", fmt.Errorf("vSphere credential secret name missing")
+	}
+
+	secretNamespace := cluster.ObjectMeta.Namespace
+
+	logger.V(4).Info("Fetching vSphere credentials from secret", "secret-namespace", secretNamespace, "secret-name", secretName)
+
+	credentialSecret := &apiv1.Secret{}
+	credentialSecretKey := client.ObjectKey{
+		Namespace: secretNamespace,
+		Name:      secretName,
+	}
+	if err := c.Get(context.TODO(), credentialSecretKey, credentialSecret); err != nil {
+		return "", "", errors.Wrapf(err, "error getting credentials secret %s in namespace %s", secretName, secretNamespace)
+	}
+
+	userBuf, userOk := credentialSecret.Data[constants.VSphereCredentialSecretUserKey]
+	passBuf, passOk := credentialSecret.Data[constants.VSphereCredentialSecretPassKey]
+	if !userOk || !passOk {
+		return "", "", fmt.Errorf("improperly formatted credentials secret %q in namespace %s", secretName, secretNamespace)
+	}
+	username, password := string(userBuf), string(passBuf)
+
+	logger.V(4).Info("Found vSphere credentials in secret", "secret-namespace", secretNamespace, "secret-name", secretName)
+
+	return username, password, nil
 }

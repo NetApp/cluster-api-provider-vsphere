@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/vapi/rest"
@@ -22,6 +23,14 @@ const (
 func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReference) error {
 
 	restClient := rest.NewClient(ctx.Session.Client.Client)
+	u, p, err := context.GetVSphereCredentials(ctx.Logger, ctx.Client, ctx.Cluster)
+	if err != nil {
+		return err
+	}
+	err = restClient.Login(ctx.Context, url.UserPassword(u, p))
+	if err != nil {
+		return err
+	}
 	tagManager := tags.NewManager(restClient)
 
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
@@ -46,6 +55,14 @@ func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReferen
 func CleanupNKSTags(ctx *context.MachineContext) error {
 
 	restClient := rest.NewClient(ctx.Session.Client.Client)
+	u, p, err := context.GetVSphereCredentials(ctx.Logger, ctx.Client, ctx.Cluster)
+	if err != nil {
+		return err
+	}
+	err = restClient.Login(ctx.Context, url.UserPassword(u, p))
+	if err != nil {
+		return err
+	}
 	tagManager := tags.NewManager(restClient)
 	clusterID, workspaceID, isServiceCluster := ctx.GetNKSClusterInfo()
 
@@ -165,6 +182,9 @@ func getOrCreateNKSTagCategory(ctx *context.MachineContext, tm *tags.Manager) (*
 	category, err := tm.GetCategory(ctx, categoryName)
 	if err == nil && category != nil {
 		return category, nil
+	}
+	if err != nil {
+		ctx.Logger.V(4).Info("error checking vSphere tag category", "category", categoryName, "error", err.Error())
 	}
 
 	newCategory := &tags.Category{

@@ -68,6 +68,7 @@ func init() {
 }
 
 func main() {
+
 	klog.InitFlags(nil)
 	ctrllog.SetLogger(klogr.New())
 	setupLog := ctrllog.Log.WithName("entrypoint")

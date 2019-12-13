@@ -44,6 +44,8 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/session"
 	infrautilv1 "sigs.k8s.io/cluster-api-provider-vsphere/pkg/util"
+
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/ipam"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vspheremachines,verbs=get;list;watch;create;update;patch;delete
@@ -139,10 +141,17 @@ func (r machineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr er
 		return reconcile.Result{}, nil
 	}
 
+	// NetApp
+	username, password, err := context.GetVSphereCredentials(r.Logger, r.Client, cluster)
+	if err != nil {
+		return reconcile.Result{}, errors.Wrapf(err,
+			"failed to get credentials for Cluster %s/%s",
+			vsphereMachine.Namespace, cluster.Name)
+	}
+
 	// Get or create an authenticated session to the vSphere endpoint.
 	authSession, err := session.GetOrCreate(r.Context,
-		vsphereCluster.Spec.Server, vsphereMachine.Spec.Datacenter,
-		r.ControllerManagerContext.Username, r.ControllerManagerContext.Password)
+		vsphereCluster.Spec.Server, vsphereMachine.Spec.Datacenter, username, password)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "failed to create vSphere session")
 	}
@@ -281,6 +290,12 @@ func (r machineReconciler) reconcileDelete(ctx *context.MachineContext) (reconci
 	vm, err := vmService.DestroyVM(ctx)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err, "failed to destroy VM")
+	}
+
+	// NetApp
+	var ipamService = &ipam.Service{}
+	if err := ipamService.ReleaseIPAM(ctx); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Requeue the operation until the VM is "notfound".

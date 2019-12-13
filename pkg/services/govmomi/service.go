@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/extra"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/net"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/util"
 )
 
@@ -131,6 +132,13 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 		// is the desired state.
 		if isNotFound(err) {
 			vm.State = infrav1.VirtualMachineStateNotFound
+
+			// NetApp
+			if err := vms.deleteTags(ctx); err != nil {
+				// Just log the error
+				ctx.Logger.Error(err, "error deleting tags")
+			}
+
 			return vm, nil
 		}
 		return vm, err
@@ -338,4 +346,48 @@ func (vms *VMService) getNetworkStatus(ctx *virtualMachineContext) ([]infrav1.Ne
 		})
 	}
 	return apiNetStatus, nil
+}
+
+func (vms *VMService) getBootstrapData(ctx *context.MachineContext) ([]byte, error) {
+	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
+		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := apitypes.NamespacedName{
+		Namespace: ctx.Machine.GetNamespace(),
+		Name:      *ctx.Machine.Spec.Bootstrap.DataSecretName,
+	}
+	if err := ctx.Client.Get(ctx, secretKey, secret); err != nil {
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for %s", ctx)
+	}
+
+	value, ok := secret.Data["value"]
+	if !ok {
+		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return value, nil
+}
+
+// NetApp
+func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
+	vmRef, err := findVM(ctx)
+	if err != nil {
+		return err
+	}
+	err = tags.TagNKSMachine(ctx, vmRef)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// NetApp
+func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
+	err := tags.CleanupNKSTags(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }

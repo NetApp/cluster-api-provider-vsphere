@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/extra"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/net"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/services/govmomi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/util"
 )
 
@@ -141,6 +142,13 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 		// is the desired state.
 		if isNotFound(err) {
 			vm.State = infrav1.VirtualMachineStateNotFound
+
+			// NetApp
+			if err := vms.deleteTags(ctx); err != nil {
+				// Just log the error
+				ctx.Logger.Error(err, "error deleting tags")
+			}
+
 			return vm, nil
 		}
 		return vm, err
@@ -370,4 +378,26 @@ func (vms *VMService) getBootstrapData(ctx *context.MachineContext) ([]byte, err
 	}
 
 	return value, nil
+}
+
+// NetApp
+func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
+	vmRef, err := findVM(ctx)
+	if err != nil {
+		return err
+	}
+	err = tags.TagNKSMachine(ctx, vmRef)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// NetApp
+func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
+	err := tags.CleanupNKSTags(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }

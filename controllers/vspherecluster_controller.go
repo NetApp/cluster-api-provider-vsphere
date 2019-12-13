@@ -511,10 +511,18 @@ func (r clusterReconciler) reconcileCloudConfigSecret(ctx *context.ClusterContex
 			ctx.Cluster.Namespace, ctx.Cluster.Name)
 	}
 
+	// NetApp
+	username, password, err := context.GetVSphereCredentials(ctx.Logger, ctx.Client, ctx.Cluster)
+	if err != nil {
+		return errors.Wrapf(err,
+			"failed to get credentials for Cluster %s/%s",
+			ctx.Cluster.Namespace, ctx.Cluster.Name)
+	}
+
 	credentials := map[string]string{}
 	for server := range ctx.VSphereCluster.Spec.CloudProviderConfiguration.VCenter {
-		credentials[fmt.Sprintf("%s.username", server)] = ctx.Username
-		credentials[fmt.Sprintf("%s.password", server)] = ctx.Password
+		credentials[fmt.Sprintf("%s.username", server)] = username
+		credentials[fmt.Sprintf("%s.password", server)] = password
 	}
 	// Define the kubeconfig secret for the target cluster.
 	secret := &apiv1.Secret{

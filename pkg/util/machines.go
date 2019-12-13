@@ -146,6 +146,8 @@ func GetMachineMetadata(hostname string, machine infrav1.VSphereMachine, network
 			devices[i].MACAddr = networkStatus[i].MACAddr
 		}
 	}
+	// NetApp
+	metadataTemplate := getVersionedMetadataTemplate(machine)
 
 	buf := &bytes.Buffer{}
 	tpl := template.Must(template.New("t").Funcs(
@@ -153,7 +155,7 @@ func GetMachineMetadata(hostname string, machine infrav1.VSphereMachine, network
 			"nameservers": func(spec infrav1.NetworkDeviceSpec) bool {
 				return len(spec.Nameservers) > 0 || len(spec.SearchDomains) > 0
 			},
-		}).Parse(metadataFormat))
+		}).Parse(metadataTemplate)) // NetApp
 	if err := tpl.Execute(buf, struct {
 		Hostname string
 		Devices  []infrav1.NetworkDeviceSpec
@@ -184,6 +186,20 @@ const (
 	// to convert a UUID into a providerID string.
 	UUIDPattern = `(?i)^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$`
 )
+
+// NetApp
+func getVersionedMetadataTemplate(machine infrav1.VSphereMachine) string {
+	const networkConfigVersionAnnotationKey = "network-config-version"
+	networkConfigVersion, ok := machine.Annotations[networkConfigVersionAnnotationKey]
+	if ok && networkConfigVersion == "v1" {
+		return metadataFormatV1
+	}
+	if ok && networkConfigVersion == "v2" {
+		return metadataFormat
+	}
+	// Default to v1
+	return metadataFormatV1
+}
 
 // ConvertProviderIDToUUID transforms a provider ID into a UUID string.
 // If providerID is nil, empty, or invalid, then an empty string is returned.

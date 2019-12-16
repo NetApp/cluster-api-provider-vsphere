@@ -244,10 +244,15 @@ func (r clusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconci
 	return reconcile.Result{}, nil
 }
 
-func (r clusterReconciler) reconcileAPIEndpoints(ctx *context.ClusterContext) error {
-	// If the cluster already has API endpoints set then there is nothing to do.
-	if ctx.VSphereCluster.Spec.ControlPlaneEndpoint != (infrav1.APIEndpoint{}) {
-		ctx.Logger.V(6).Info("API endpoints already exist")
+func (r clusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) error {
+	// If the cluster already has a control plane endpoint set then there
+	// is nothing to do.
+	if !ctx.Cluster.Spec.ControlPlaneEndpoint.IsZero() {
+		ctx.Logger.V(4).Info("ControlPlaneEndpoint already set on Cluster")
+		return nil
+	}
+	if !ctx.VSphereCluster.Spec.ControlPlaneEndpoint.IsZero() {
+		ctx.Logger.V(4).Info("ControlPlaneEndpoint already set on VSphereCluster")
 		return nil
 	}
 
@@ -290,11 +295,10 @@ func (r clusterReconciler) reconcileAPIEndpoints(ctx *context.ClusterContext) er
 				machine.Namespace, ctx.VSphereCluster.Name, vsphereMachine.Name)
 		}
 
-		// Set APIEndpoints so the CAPI controller can read the API endpoints
-		// for this VSphereCluster into the analogous CAPI Cluster using an
-		// UnstructuredReader.
-		ctx.VSphereCluster.Spec.ControlPlaneEndpoint = apiEndpoint
-		vsphereCluster := ctx.VSphereCluster.DeepCopy()
+		// Set the ControlPlaneEndpoint so the CAPI controller can read the
+		// value into the analogous CAPI Cluster using an UnstructuredReader.
+		ctx.VSphereCluster.Spec.ControlPlaneEndpoint.Host = ipAddr
+		ctx.VSphereCluster.Spec.ControlPlaneEndpoint.Port = apiEndpointPort
 
 		// Enqueue a reconcile request for the cluster when the target API
 		// server is online.
@@ -601,7 +605,7 @@ func (r clusterReconciler) controlPlaneMachineToCluster(o handler.MapObject) []c
 		return nil
 	}
 
-	if vsphereCluster.Spec.ControlPlaneEndpoint != (infrav1.APIEndpoint{}) {
+	if !vsphereCluster.Spec.ControlPlaneEndpoint.IsZero() {
 		return nil
 	}
 

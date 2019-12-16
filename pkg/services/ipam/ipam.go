@@ -9,7 +9,7 @@ import (
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam/factory"
 	"github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha3"
 	capvcontext "sigs.k8s.io/cluster-api-provider-vsphere/pkg/context"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

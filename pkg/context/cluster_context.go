@@ -21,10 +21,12 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	apiv1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/constants"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/patch"
-
-	"sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha3"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ClusterContext is a Go context used with a CAPI cluster.
@@ -68,7 +70,7 @@ func GetVSphereCredentials(logger logr.Logger, c client.Client, cluster *cluster
 		Name:      secretName,
 	}
 	if err := c.Get(context.TODO(), credentialSecretKey, credentialSecret); err != nil {
-		return "", "", errors.Wrapf(err, "error getting credentials secret %s in namespace %s", secretName, secretNamespace)
+		return "", "", fmt.Errorf("error getting credentials secret %s in namespace %s, %w", secretName, secretNamespace, err)
 	}
 
 	userBuf, userOk := credentialSecret.Data[constants.VSphereCredentialSecretUserKey]

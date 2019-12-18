@@ -13,8 +13,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/MakeNowJust/heredoc v1.0.0/go.mod h1:mG5amYoWBHf8vpLOuehzbGGw0EHxpZZ6lCpQ4fNJ8LE=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
-github.com/NetApp/nks-on-prem-ipam v0.1.4 h1:tQ/+BiRyLp7ns9tf/95EPSdAdrA+0XQTMCa6UknCWvk=
-github.com/NetApp/nks-on-prem-ipam v0.1.4/go.mod h1:ZfJJsukCxUTPVF4RnekFnVMz27x8SuU4YlD2jaqCKSU=
+github.com/NetApp/nks-on-prem-ipam v0.1.5 h1:l6BlckNPq+4DrP2xyceM7g4EqUY558JuiuQreZfI2vo=
+github.com/NetApp/nks-on-prem-ipam v0.1.5/go.mod h1:ZfJJsukCxUTPVF4RnekFnVMz27x8SuU4YlD2jaqCKSU=
 github.com/PuerkitoBio/purell v1.0.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=

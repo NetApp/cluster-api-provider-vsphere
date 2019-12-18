@@ -21,6 +21,13 @@ const (
 	ipamConfigSecretNamespaceAnnotationKey = "ipam-config-secret-namespace"
 	ipamConfigSecretKey                    = "config.json"
 
+	WorkspaceIDMetaDataKey       = "hci.nks.netapp.com/workspace"
+	ClusterIDMetaDataKey         = "hci.nks.netapp.com/cluster"
+	ClusterInstanceIDMetaDataKey = "hci.nks.netapp.com/instanceid"
+	VMNameMetaDataKey            = "hci.nks.netapp.com/vmname"
+	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
+	IPReservationTypeNodeIP      = "nodeip"
+
 	zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
 
 	ipamManagedAnnotationKey = "ipam-managed"
@@ -65,9 +72,11 @@ func (svc *IPAMService) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get ipam agent")
 	}
 
+	metaData := getReservationMetaData(ctx)
+
 	for networkType, networkTypeDevices := range networkTypeDeviceMap {
 
-		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), nil)
+		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), nil, metaData)
 		if err != nil {
 			return errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
 		}
@@ -300,4 +309,17 @@ func loadConfig(ctx *capvcontext.MachineContext) (*ipam.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
+
+	clusterID, workspaceID, _, _ := ctx.GetNKSClusterInfo()
+
+	return map[string]string{
+		IPReservationTypeMetaDataKey: IPReservationTypeNodeIP,
+		ClusterIDMetaDataKey:         clusterID,
+		WorkspaceIDMetaDataKey:       workspaceID,
+		ClusterInstanceIDMetaDataKey: ctx.Cluster.Name,
+		VMNameMetaDataKey:            ctx.Machine.Name,
+	}
 }

@@ -21,12 +21,12 @@ const (
 	ipamConfigSecretNamespaceAnnotationKey = "ipam-config-secret-namespace"
 	ipamConfigSecretKey                    = "config.json"
 
-	WorkspaceLabelKey         = "hci.nks.netapp.com/workspace"
-	ClusterLabelKey           = "hci.nks.netapp.com/cluster"
-	ClusterInstanceIDLabelKey = "hci.nks.netapp.com/instanceid"
-	VMNameLabelKey            = "hci.nks.netapp.com/vmname"
-	IPReservationTypeKey      = "hci.nks.netapp.com/reservationtype"
-	IPReservationTypeNodeIP   = "nodeip"
+	WorkspaceIDMetaDataKey       = "hci.nks.netapp.com/workspace"
+	ClusterIDMetaDataKey         = "hci.nks.netapp.com/cluster"
+	ClusterInstanceIDMetaDataKey = "hci.nks.netapp.com/instanceid"
+	VMNameMetaDataKey            = "hci.nks.netapp.com/vmname"
+	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
+	IPReservationTypeNodeIP      = "nodeip"
 
 	zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
 
@@ -316,10 +316,10 @@ func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 	clusterID, workspaceID, _, _ := ctx.GetNKSClusterInfo()
 
 	return map[string]string{
-		IPReservationTypeKey:      IPReservationTypeNodeIP,
-		ClusterLabelKey:           clusterID,
-		WorkspaceLabelKey:         workspaceID,
-		ClusterInstanceIDLabelKey: ctx.Cluster.Name,
-		VMNameLabelKey:            ctx.Machine.Name,
+		IPReservationTypeMetaDataKey: IPReservationTypeNodeIP,
+		ClusterIDMetaDataKey:         clusterID,
+		WorkspaceIDMetaDataKey:       workspaceID,
+		ClusterInstanceIDMetaDataKey: ctx.Cluster.Name,
+		VMNameMetaDataKey:            ctx.Machine.Name,
 	}
 }

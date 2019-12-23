@@ -11,6 +11,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
 	capvcontext "sigs.k8s.io/cluster-api-provider-vsphere/pkg/cloud/vsphere/context"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 )
 
 const (
@@ -240,7 +241,8 @@ func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devic
 	}
 	for i, device := range devices {
 		reservation := reservations[i]
-		device.IPAddrs = append(device.IPAddrs, reservation.Address)
+		prefixLengthSuffix := "/" + strconv.Itoa(reservation.NetworkConfig.PrefixLength)
+		device.IPAddrs = append(device.IPAddrs, reservation.Address+prefixLengthSuffix)
 		device.Nameservers = reservation.NetworkConfig.NameServers
 		device.Gateway4 = reservation.NetworkConfig.DefaultGateway
 		device.SearchDomains = reservation.NetworkConfig.DomainSearch

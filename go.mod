@@ -3,7 +3,7 @@ module sigs.k8s.io/cluster-api-provider-vsphere
 go 1.12
 
 require (
-	github.com/NetApp/nks-on-prem-ipam v0.1.6-0.20191222155442-ddaab3f29fca
+	github.com/NetApp/nks-on-prem-ipam v0.1.6
 	github.com/go-logr/logr v0.1.0
 	github.com/google/uuid v1.1.1
 	github.com/onsi/ginkgo v1.8.0

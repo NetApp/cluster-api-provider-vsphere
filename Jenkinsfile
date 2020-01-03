@@ -43,7 +43,7 @@ pipeline {
 
     stage('publish: dev') {
       when {
-        branch 'netapp-update-201912'
+        branch 'netapp-0.5'
       }
       environment {
         GIT_COMMIT_SHORT = sh(

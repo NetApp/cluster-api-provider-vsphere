@@ -20,11 +20,16 @@ import (
 	"context"
 	"fmt"
 
+	apiv1 "k8s.io/api/core/v1"
+
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"sigs.k8s.io/cluster-api-provider-vsphere/api/v1alpha2"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/constants"
 )
 
 // ClusterContext is a Go context used with a CAPI cluster.

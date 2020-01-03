@@ -29,7 +29,8 @@ const (
 	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
 	IPReservationTypeNodeIP      = "nodeip"
 
-	zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
+	// lint
+	// zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
 
 	ipamManagedAnnotationKey = "ipam-managed"
 

@@ -348,28 +348,6 @@ func (vms *VMService) getNetworkStatus(ctx *virtualMachineContext) ([]infrav1.Ne
 	return apiNetStatus, nil
 }
 
-func (vms *VMService) getBootstrapData(ctx *context.MachineContext) ([]byte, error) {
-	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
-		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
-	}
-
-	secret := &corev1.Secret{}
-	secretKey := apitypes.NamespacedName{
-		Namespace: ctx.Machine.GetNamespace(),
-		Name:      *ctx.Machine.Spec.Bootstrap.DataSecretName,
-	}
-	if err := ctx.Client.Get(ctx, secretKey, secret); err != nil {
-		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for %s", ctx)
-	}
-
-	value, ok := secret.Data["value"]
-	if !ok {
-		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
-	}
-
-	return value, nil
-}
-
 // NetApp
 func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
 	vmRef, err := findVM(ctx)

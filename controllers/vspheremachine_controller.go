@@ -293,16 +293,16 @@ func (r machineReconciler) reconcileDelete(ctx *context.MachineContext) (reconci
 		return reconcile.Result{}, errors.Wrapf(err, "failed to destroy VM")
 	}
 
-	// NetApp
-	var ipamService = &ipam.Service{}
-	if err := ipamService.ReleaseIPAM(ctx); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Requeue the operation until the VM is "notfound".
 	if vm.State != infrav1.VirtualMachineStateNotFound {
 		ctx.Logger.Info("vm state is not reconciled", "expected-vm-state", infrav1.VirtualMachineStateNotFound, "actual-vm-state", vm.State)
 		return reconcile.Result{}, nil
+	}
+
+	// NetApp
+	var ipamService = &ipam.Service{}
+	if err := ipamService.ReleaseIPAM(ctx); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// The VM is deleted so remove the finalizer.

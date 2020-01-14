@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam"
 	"github.com/NetApp/nks-on-prem-ipam/pkg/ipam/factory"
@@ -29,9 +30,7 @@ const (
 	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
 	IPReservationTypeNodeIP      = "nodeip"
 
-	// lint
-	// zoneNameAnnotationKey = "hci.nks.netapp.com/zone"
-
+	zoneNameAnnotationKey    = "hci.nks.netapp.com/zone"
 	ipamManagedAnnotationKey = "ipam-managed"
 
 	managementZoneName = "management"
@@ -222,7 +221,11 @@ func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1
 		return nil, fmt.Errorf("cluster infrastructure missing")
 	}
 
-	isManagementZone := ctx.VSphereCluster.Spec.CloudProviderConfiguration.Labels.Zone == managementZoneName
+	zoneName, ok := ctx.VSphereMachine.Annotations[zoneNameAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("zone missing from machine")
+	}
+	isManagementZone := zoneName == managementZoneName
 
 	// Determine network types for each device
 	networkTypeDeviceMap := make(map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec)
@@ -243,7 +246,8 @@ func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devic
 	}
 	for i, device := range devices {
 		reservation := reservations[i]
-		device.IPAddrs = append(device.IPAddrs, reservation.Address)
+		prefixLengthSuffix := "/" + strconv.Itoa(reservation.NetworkConfig.PrefixLength)
+		device.IPAddrs = append(device.IPAddrs, reservation.Address+prefixLengthSuffix)
 		device.Nameservers = reservation.NetworkConfig.NameServers
 		device.Gateway4 = reservation.NetworkConfig.DefaultGateway
 		device.SearchDomains = reservation.NetworkConfig.DomainSearch

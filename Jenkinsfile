@@ -43,7 +43,7 @@ pipeline {
 
     stage('publish: dev') {
       when {
-        branch 'netapp-0.5'
+        branch 'PR-*'
       }
       environment {
         GIT_COMMIT_SHORT = sh(
@@ -64,7 +64,7 @@ pipeline {
 
     stage('publish: netapp') {
       when {
-        branch 'netapp'
+        branch 'netapp-0.5'
       }
       environment {
         GIT_COMMIT_SHORT = sh(
@@ -76,8 +76,8 @@ pipeline {
         container('builder-base') {
           script {
             docker.withRegistry("https://${DOCKER_REGISTRY}", "gcr:${ORG}") {
-              image.push("netapp-${GIT_COMMIT_SHORT}")
-              image.push("netapp")
+              image.push("netapp-0.5-{GIT_COMMIT_SHORT}")
+              image.push("netapp-0.5")
             }
           }
         }

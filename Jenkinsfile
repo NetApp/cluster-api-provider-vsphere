@@ -76,7 +76,7 @@ pipeline {
         container('builder-base') {
           script {
             docker.withRegistry("https://${DOCKER_REGISTRY}", "gcr:${ORG}") {
-              image.push("netapp-0.5-{GIT_COMMIT_SHORT}")
+              image.push("netapp-0.5-${GIT_COMMIT_SHORT}")
               image.push("netapp-0.5")
             }
           }

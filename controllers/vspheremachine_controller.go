@@ -334,6 +334,12 @@ func (r machineReconciler) reconcileNormal(ctx *context.MachineContext) (reconci
 		return reconcile.Result{}, nil
 	}
 
+	// NetApp
+	var ipamService = &ipam.Service{}
+	if err := ipamService.ReconcileIPAM(ctx); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// TODO(akutz) Implement selection of VM service based on vSphere version
 	var vmService services.VirtualMachineService = &govmomi.VMService{}
 

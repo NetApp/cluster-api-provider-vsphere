@@ -101,6 +101,12 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (vm infrav1.Virtu
 		return vm, err
 	}
 
+	// NetApp
+	if err := vms.reconcileTags(ctx); err != nil {
+		// Just log the error
+		ctx.Logger.Error(err, "error reconciling tags")
+	}
+
 	vm.State = infrav1.VirtualMachineStateReady
 	return vm, nil
 }

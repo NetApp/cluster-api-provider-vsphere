@@ -23,13 +23,6 @@ const (
 	ipamConfigNamespaceAnnotationKey = "ipam-config-secret-namespace"
 	ipamConfigKey                    = "config.json"
 
-	WorkspaceIDMetaDataKey       = "hci.nks.netapp.com/workspace"
-	ClusterIDMetaDataKey         = "hci.nks.netapp.com/cluster"
-	ClusterInstanceIDMetaDataKey = "hci.nks.netapp.com/instanceid"
-	VMNameMetaDataKey            = "hci.nks.netapp.com/vmname"
-	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
-	IPReservationTypeNodeIP      = "nodeip"
-
 	zoneNameAnnotationKey    = "hci.nks.netapp.com/zone"
 	ipamManagedAnnotationKey = "ipam-managed"
 
@@ -42,8 +35,6 @@ type stateAnnotation struct {
 	ID string `json:"id"`
 	IP string `json:"ip"`
 }
-
-// TODO Use metadata constants
 
 func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
@@ -354,11 +345,11 @@ func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 	clusterID, workspaceID, _, _ := ctx.GetNKSClusterInfo()
 
 	return map[string]string{
-		IPReservationTypeMetaDataKey: IPReservationTypeNodeIP,
-		ClusterIDMetaDataKey:         clusterID,
-		WorkspaceIDMetaDataKey:       workspaceID,
-		ClusterInstanceIDMetaDataKey: ctx.Cluster.Name,
-		VMNameMetaDataKey:            ctx.Machine.Name,
+		ipam.IPReservationTypeKey: ipam.IPReservationTypeNodeIP,
+		ipam.ClusterIDKey:         clusterID,
+		ipam.WorkspaceIDKey:       workspaceID,
+		ipam.ClusterInstanceIDKey: ctx.Cluster.Name,
+		ipam.VMNameKey:            ctx.Machine.Name,
 	}
 }
 

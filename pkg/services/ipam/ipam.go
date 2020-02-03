@@ -75,11 +75,16 @@ func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 	for networkType, networkTypeDevices := range networkTypeDeviceMap {
 
+		// TODO Have to cleanup the reservations for the other devices on failure
+
 		// TODO It is forbidden to have multiple devices on the same network
 		// TODO That shouldn't be an option here - should error out if that happens
 		var reservationNames []string
 		for range networkTypeDevices {
-			reservationName := getReservationName(ctx, networkType)
+			reservationName, err := getReservationName(ctx, networkType)
+			if err != nil {
+				return errors.Wrap(err, "failed to get reservation name")
+			}
 			reservationNames = append(reservationNames, reservationName)
 		}
 
@@ -353,12 +358,15 @@ func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 	}
 }
 
-func getReservationName(ctx *capvcontext.MachineContext, networkType ipam.NetworkType) string {
+func getReservationName(ctx *capvcontext.MachineContext, networkType ipam.NetworkType) (string, error) {
+	if ctx.VSphereMachine == nil {
+		return "", fmt.Errorf("VSphereMachine is nil")
+	}
 	// If this is a reservation for the management or workload networks (primary networks)
-	// then the reservation name should be the host name
+	// then the reservation name should be the machine name
 	if networkType == ipam.Management || networkType == ipam.Workload {
-		return ctx.Name
+		return ctx.VSphereMachine.Name, nil
 	}
 	// If this is a secondary network (e.g. the data network) then we append the network type to the name
-	return fmt.Sprintf("%s-%s", ctx.Name, networkType)
+	return fmt.Sprintf("%s-%s", ctx.VSphereMachine.Name, networkType), nil
 }

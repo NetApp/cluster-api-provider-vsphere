@@ -38,6 +38,13 @@ const (
 
 type Service struct{}
 
+type ipamManagedAnnotation struct {
+	ID string `json:"id"`
+	IP string `json:"ip"`
+}
+
+// TODO Use metadata constants
+
 func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 	if ctx.VSphereMachine == nil {
@@ -77,29 +84,37 @@ func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 	for networkType, networkTypeDevices := range networkTypeDeviceMap {
 
-		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), nil, metaData)
+		// TODO It is forbidden to have multiple devices on the same network
+		// TODO That shouldn't be an option here - should error out if that happens
+		var reservationNames []string
+		for range networkTypeDevices {
+			reservationName := getReservationName(ctx, networkType)
+			reservationNames = append(reservationNames, reservationName)
+		}
+
+		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), reservationNames, nil, metaData)
 		if err != nil {
 			return errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
 		}
-		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "IPs", getReservationIPs(reservations))
+		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "reservations", mapStateAnnotation(reservations))
 
-		// Update IPAM annotation
+		// Update IPAM managed annotation
 
-		networkTypeToIPs := make(map[string][]string)
+		networkTypeToReservations := make(map[string][]ipamManagedAnnotation)
 		val, ok := ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey]
 		if ok {
-			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
+			if err := json.Unmarshal([]byte(val), &networkTypeToReservations); err != nil {
 				cleanupReservations(ctx, agent, networkType, reservations)
 				return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 			}
 		}
-		networkTypeIPs, ok := networkTypeToIPs[string(networkType)]
+		networkTypeReservations, ok := networkTypeToReservations[string(networkType)]
 		if ok {
-			networkTypeToIPs[string(networkType)] = append(networkTypeIPs, getReservationIPs(reservations)...)
+			networkTypeToReservations[string(networkType)] = append(networkTypeReservations, mapStateAnnotation(reservations)...)
 		} else {
-			networkTypeToIPs[string(networkType)] = getReservationIPs(reservations)
+			networkTypeToReservations[string(networkType)] = mapStateAnnotation(reservations)
 		}
-		marshalled, err := json.Marshal(networkTypeToIPs)
+		marshalled, err := json.Marshal(networkTypeToReservations)
 		if err != nil {
 			cleanupReservations(ctx, agent, networkType, reservations)
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
@@ -133,12 +148,12 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return nil
 	}
 
-	networkTypeToIPs := make(map[string][]string)
-	if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
+	networkTypeToReservations := make(map[string][]ipamManagedAnnotation)
+	if err := json.Unmarshal([]byte(val), &networkTypeToReservations); err != nil {
 		return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 	}
 
-	if len(networkTypeToIPs) == 0 {
+	if len(networkTypeToReservations) == 0 {
 		// Nothing to do
 		return nil
 	}
@@ -148,19 +163,23 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get ipam agent")
 	}
 
-	for netType, ips := range networkTypeToIPs {
+	for netType, reservations := range networkTypeToReservations {
 		networkType, err := mapNetworkType(netType)
 		if err != nil {
 			return errors.Wrapf(err, "could not map network type")
 		}
-		if len(ips) > 0 {
-			if err := agent.ReleaseIPs(networkType, ips); err != nil {
-				return errors.Wrapf(err, "could not release IPs: %s", ips)
+		if len(reservations) > 0 {
+			reservationIDs := make([]string, 0, len(reservations))
+			for _, res := range reservations {
+				reservationIDs = append(reservationIDs, res.ID)
 			}
-			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IPs", ips)
+			if err := agent.ReleaseIPs(networkType, reservationIDs); err != nil {
+				return errors.Wrapf(err, "could not release IPs: %s", reservationIDs)
+			}
+			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IDs", reservationIDs)
 		}
-		delete(networkTypeToIPs, netType)
-		marshalled, err := json.Marshal(networkTypeToIPs)
+		delete(networkTypeToReservations, netType)
+		marshalled, err := json.Marshal(networkTypeToReservations)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
@@ -171,10 +190,10 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 }
 
 func cleanupReservations(ctx *capvcontext.MachineContext, agent ipam.Agent, networkType ipam.NetworkType, reservations []ipam.IPAddressReservation) {
-	ips := getReservationIPs(reservations)
-	ctx.Logger.Info("Cleaning up IP reservations", "networkType", string(networkType), "IPs", ips)
-	if err := agent.ReleaseIPs(networkType, ips); err != nil {
-		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IPs", ips)
+	ids := getReservationIDs(reservations)
+	ctx.Logger.Info("Cleaning up IP reservations", "networkType", string(networkType), "IDs", ids)
+	if err := agent.ReleaseIPs(networkType, ids); err != nil {
+		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IDs", ids)
 	}
 }
 
@@ -245,17 +264,28 @@ func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devic
 		device.IPAddrs = append(device.IPAddrs, reservation.Address+prefixLengthSuffix)
 		device.Nameservers = reservation.NetworkConfig.NameServers
 		device.Gateway4 = reservation.NetworkConfig.DefaultGateway
-		device.SearchDomains = reservation.NetworkConfig.DomainSearch
+		device.SearchDomains = reservation.NetworkConfig.SearchDomains
 	}
 	return nil
 }
 
-func getReservationIPs(reservations []ipam.IPAddressReservation) []string {
-	ips := make([]string, 0)
+func getReservationIDs(reservations []ipam.IPAddressReservation) []string {
+	ids := make([]string, 0)
 	for _, res := range reservations {
-		ips = append(ips, res.Address)
+		ids = append(ids, res.ID)
 	}
-	return ips
+	return ids
+}
+
+func mapStateAnnotation(reservations []ipam.IPAddressReservation) []ipamManagedAnnotation {
+	annotations := make([]ipamManagedAnnotation, 0)
+	for _, res := range reservations {
+		annotations = append(annotations, ipamManagedAnnotation{
+			ID: res.ID,
+			IP: res.Address,
+		})
+	}
+	return annotations
 }
 
 func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
@@ -267,6 +297,7 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ipam agent")
 	}
+	// TODO This health check is way to slow on infoblox to do it this often I think
 	if err := agent.HealthCheck(); err != nil {
 		return nil, errors.Wrap(err, "ipam agent health check failed")
 	}
@@ -324,4 +355,14 @@ func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 		ClusterInstanceIDMetaDataKey: ctx.Cluster.Name,
 		VMNameMetaDataKey:            ctx.Machine.Name,
 	}
+}
+
+func getReservationName(ctx *capvcontext.MachineContext, networkType ipam.NetworkType) string {
+	// If this is a reservation for the management or workload networks (primary networks)
+	// then the reservation name should be the host name
+	if networkType == ipam.Management || networkType == ipam.Workload {
+		return ctx.Name
+	}
+	// If this is a secondary network (e.g. the data network) then we append the network type to the name
+	return fmt.Sprintf("%s-%s", ctx.Name, networkType)
 }

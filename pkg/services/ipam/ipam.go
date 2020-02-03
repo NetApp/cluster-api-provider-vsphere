@@ -38,7 +38,7 @@ const (
 
 type Service struct{}
 
-type ipamManagedAnnotation struct {
+type stateAnnotation struct {
 	ID string `json:"id"`
 	IP string `json:"ip"`
 }
@@ -100,21 +100,21 @@ func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 		// Update IPAM managed annotation
 
-		networkTypeToReservations := make(map[string][]ipamManagedAnnotation)
+		networkTypeToAnnotations := make(map[string][]stateAnnotation)
 		val, ok := ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey]
 		if ok {
-			if err := json.Unmarshal([]byte(val), &networkTypeToReservations); err != nil {
+			if err := json.Unmarshal([]byte(val), &networkTypeToAnnotations); err != nil {
 				cleanupReservations(ctx, agent, networkType, reservations)
 				return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 			}
 		}
-		networkTypeReservations, ok := networkTypeToReservations[string(networkType)]
+		networkTypeAnnotations, ok := networkTypeToAnnotations[string(networkType)]
 		if ok {
-			networkTypeToReservations[string(networkType)] = append(networkTypeReservations, mapToAnnotations(reservations)...)
+			networkTypeToAnnotations[string(networkType)] = append(networkTypeAnnotations, mapToAnnotations(reservations)...)
 		} else {
-			networkTypeToReservations[string(networkType)] = mapToAnnotations(reservations)
+			networkTypeToAnnotations[string(networkType)] = mapToAnnotations(reservations)
 		}
-		marshalled, err := json.Marshal(networkTypeToReservations)
+		marshalled, err := json.Marshal(networkTypeToAnnotations)
 		if err != nil {
 			cleanupReservations(ctx, agent, networkType, reservations)
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
@@ -148,12 +148,12 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return nil
 	}
 
-	networkTypeToReservations := make(map[string][]ipamManagedAnnotation)
-	if err := json.Unmarshal([]byte(val), &networkTypeToReservations); err != nil {
+	networkTypeToAnnotations := make(map[string][]stateAnnotation)
+	if err := json.Unmarshal([]byte(val), &networkTypeToAnnotations); err != nil {
 		return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 	}
 
-	if len(networkTypeToReservations) == 0 {
+	if len(networkTypeToAnnotations) == 0 {
 		// Nothing to do
 		return nil
 	}
@@ -163,20 +163,20 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get ipam agent")
 	}
 
-	for netType, reservations := range networkTypeToReservations {
+	for netType, annotations := range networkTypeToAnnotations {
 		networkType, err := mapNetworkType(netType)
 		if err != nil {
 			return errors.Wrapf(err, "could not map network type")
 		}
-		if len(reservations) > 0 {
-			reservationIDs := getIDsFromAnnotations(reservations)
+		if len(annotations) > 0 {
+			reservationIDs := getIDsFromAnnotations(annotations)
 			if err := agent.ReleaseIPs(networkType, reservationIDs); err != nil {
 				return errors.Wrapf(err, "could not release IPs: %s", reservationIDs)
 			}
 			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IDs", reservationIDs)
 		}
-		delete(networkTypeToReservations, netType)
-		marshalled, err := json.Marshal(networkTypeToReservations)
+		delete(networkTypeToAnnotations, netType)
+		marshalled, err := json.Marshal(networkTypeToAnnotations)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
@@ -274,7 +274,7 @@ func getReservationIDs(reservations []ipam.IPAddressReservation) []string {
 	return ids
 }
 
-func getIDsFromAnnotations(annotations []ipamManagedAnnotation) []string {
+func getIDsFromAnnotations(annotations []stateAnnotation) []string {
 	ids := make([]string, 0, len(annotations))
 	for _, annotation := range annotations {
 		ids = append(ids, annotation.ID)
@@ -282,10 +282,10 @@ func getIDsFromAnnotations(annotations []ipamManagedAnnotation) []string {
 	return ids
 }
 
-func mapToAnnotations(reservations []ipam.IPAddressReservation) []ipamManagedAnnotation {
-	annotations := make([]ipamManagedAnnotation, 0, len(reservations))
+func mapToAnnotations(reservations []ipam.IPAddressReservation) []stateAnnotation {
+	annotations := make([]stateAnnotation, 0, len(reservations))
 	for _, res := range reservations {
-		annotations = append(annotations, ipamManagedAnnotation{
+		annotations = append(annotations, stateAnnotation{
 			ID: res.ID,
 			IP: res.Address,
 		})

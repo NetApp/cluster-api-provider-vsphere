@@ -368,5 +368,5 @@ func getReservationName(ctx *capvcontext.MachineContext, networkType ipam.Networ
 		return ctx.VSphereMachine.Name, nil
 	}
 	// If this is a secondary network (e.g. the data network) then we append the network type to the name
-	return fmt.Sprintf("%s-%s", ctx.VSphereMachine.Name, networkType), nil
+	return fmt.Sprintf("%s-%s", ctx.VSphereMachine.Name, string(networkType)), nil
 }

@@ -4,8 +4,8 @@ github.com/Azure/go-autorest v11.1.2+incompatible/go.mod h1:r+4oMnoxhatjLLJ6zxSW
 github.com/BurntSushi/toml v0.3.0/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
-github.com/NetApp/nks-on-prem-ipam v1.0.1-0.20200204124713-d84d055216d3 h1:FUsRrzxEyIqrN1JdkiJy1nDhqrbnvuuFwf421ydk/1A=
-github.com/NetApp/nks-on-prem-ipam v1.0.1-0.20200204124713-d84d055216d3/go.mod h1:3go5b/TaYMNUlDlLwq7KR9mPCKPDB9r7ATWU3QOrA7Y=
+github.com/NetApp/nks-on-prem-ipam v1.1.0 h1:tiP6DM30dILspICDRh8aqsoFsrwqEa3hkJmb+sy0fTk=
+github.com/NetApp/nks-on-prem-ipam v1.1.0/go.mod h1:uoh+UrAXIMFuPxgPgy/AAX55FQD3nn7MN48ZXc+2WNQ=
 github.com/PuerkitoBio/purell v1.0.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
@@ -127,8 +127,8 @@ github.com/imdario/mergo v0.3.7/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJ
 github.com/imdario/mergo v0.3.8 h1:CGgOkSJeqMRmt0D9XLWExdT4m4F1vd3FV3VPt+0VxkQ=
 github.com/imdario/mergo v0.3.8/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
-github.com/infobloxopen/infoblox-go-client v0.8.1-0.20190129171843-7247dee3156a h1:JAgqx6FJcWUmJAwBWToT9zL1syOc0Six9ozQZ71ACkE=
-github.com/infobloxopen/infoblox-go-client v0.8.1-0.20190129171843-7247dee3156a/go.mod h1:BXiw7S2b9qJoM8MS40vfgCNB2NLHGusk1DtO16BD9zI=
+github.com/infobloxopen/infoblox-go-client v0.8.1-0.20190830062100-dd50c409ab6d h1:oFAo63W76GKVRa6AWa5AFKFsJlUhkBtoXV89WDHPj3A=
+github.com/infobloxopen/infoblox-go-client v0.8.1-0.20190830062100-dd50c409ab6d/go.mod h1:BXiw7S2b9qJoM8MS40vfgCNB2NLHGusk1DtO16BD9zI=
 github.com/jonboulle/clockwork v0.0.0-20141017032234-72f9bd7c4e0c/go.mod h1:Ii8DK3G1RaLaWxj9trq07+26W01tbo22gdxWY5EU2bo=
 github.com/json-iterator/go v0.0.0-20180612202835-f2b4162afba3/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v0.0.0-20180701071628-ab8a2e0c74be/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=

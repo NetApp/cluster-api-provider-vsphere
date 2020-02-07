@@ -292,7 +292,6 @@ func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ipam agent")
 	}
-	// TODO This health check is way to slow on infoblox to do it this often I think
 	if err := agent.HealthCheck(); err != nil {
 		return nil, errors.Wrap(err, "ipam agent health check failed")
 	}

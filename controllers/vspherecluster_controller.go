@@ -170,7 +170,7 @@ func (r clusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr er
 	}()
 
 	// Handle deleted clusters
-	if !vsphereCluster.DeletionTimestamp.IsZero() {
+	if !vsphereCluster.DeletionTimestamp.IsZero() || !cluster.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(clusterContext)
 	}
 

@@ -170,6 +170,7 @@ func (r clusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr er
 	}()
 
 	// Handle deleted clusters
+	// NetApp - The second check is from us
 	if !vsphereCluster.DeletionTimestamp.IsZero() || !cluster.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(clusterContext)
 	}

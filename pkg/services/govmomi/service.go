@@ -34,6 +34,11 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/util"
 )
 
+const (
+	// NetApp - Marks a VM as tagged so we don't have to re-tag (It's very slow)
+	taggedAnnotationKey = "nks.netapp.io/tagged"
+)
+
 // VMService provdes API to interact with the VMs using govmomi
 type VMService struct{}
 
@@ -356,6 +361,10 @@ func (vms *VMService) getNetworkStatus(ctx *virtualMachineContext) ([]infrav1.Ne
 
 // NetApp
 func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
+	if _, ok := ctx.VSphereMachine.Annotations[taggedAnnotationKey]; ok {
+		return nil
+	}
+
 	vmRef, err := findVM(ctx)
 	if err != nil {
 		return err
@@ -364,6 +373,9 @@ func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
 	if err != nil {
 		return err
 	}
+
+	ctx.VSphereMachine.Annotations[taggedAnnotationKey] = "true"
+
 	return nil
 }
 

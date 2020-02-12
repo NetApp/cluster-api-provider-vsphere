@@ -107,10 +107,12 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (vm infrav1.Virtu
 	}
 
 	// NetApp
-	if err := vms.reconcileTags(ctx); err != nil {
-		// Just log the error
-		ctx.Logger.Error(err, "error reconciling tags")
-	}
+	go func() {
+		if err := vms.reconcileTags(ctx); err != nil {
+			// Just log the error
+			ctx.Logger.Error(err, "error reconciling tags")
+		}
+	}()
 
 	vm.State = infrav1.VirtualMachineStateReady
 	return vm, nil
@@ -145,10 +147,12 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 			vm.State = infrav1.VirtualMachineStateNotFound
 
 			// NetApp
-			if err := vms.deleteTags(ctx); err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error deleting tags")
-			}
+			go func() {
+				if err := vms.deleteTags(ctx); err != nil {
+					// Just log the error
+					ctx.Logger.Error(err, "error deleting tags")
+				}
+			}()
 
 			return vm, nil
 		}

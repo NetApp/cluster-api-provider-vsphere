@@ -212,7 +212,7 @@ func (r clusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconci
 		if err == infrautilv1.ErrNoMachineIPAddr {
 			ctx.Logger.Info("Waiting on an API endpoint")
 			return reconcile.Result{
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: 10 * time.Second,
 			}, nil
 		}
 		return reconcile.Result{}, errors.Wrapf(err,

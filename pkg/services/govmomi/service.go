@@ -107,10 +107,7 @@ func (vms *VMService) ReconcileVM(ctx *context.MachineContext) (vm infrav1.Virtu
 	}
 
 	// NetApp
-	if err := vms.reconcileTags(ctx); err != nil {
-		// Just log the error
-		ctx.Logger.Error(err, "error reconciling tags")
-	}
+	vms.reconcileTags(ctx)
 
 	vm.State = infrav1.VirtualMachineStateReady
 	return vm, nil
@@ -144,11 +141,7 @@ func (vms *VMService) DestroyVM(ctx *context.MachineContext) (infrav1.VirtualMac
 		if isNotFound(err) {
 			vm.State = infrav1.VirtualMachineStateNotFound
 
-			// NetApp
-			if err := vms.deleteTags(ctx); err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error deleting tags")
-			}
+			vms.deleteTags(ctx)
 
 			return vm, nil
 		}
@@ -360,30 +353,37 @@ func (vms *VMService) getNetworkStatus(ctx *virtualMachineContext) ([]infrav1.Ne
 }
 
 // NetApp
-func (vms *VMService) reconcileTags(ctx *context.MachineContext) error {
+func (vms *VMService) reconcileTags(ctx *context.MachineContext) {
 	if _, ok := ctx.VSphereMachine.Annotations[taggedAnnotationKey]; ok {
-		return nil
+		return
 	}
-
-	vmRef, err := findVM(ctx)
-	if err != nil {
-		return err
-	}
-	err = tags.TagNKSMachine(ctx, vmRef)
-	if err != nil {
-		return err
-	}
-
 	ctx.VSphereMachine.Annotations[taggedAnnotationKey] = "true"
 
-	return nil
+	go func() {
+		vmRef, err := findVM(ctx)
+		if err != nil {
+			if err != nil {
+				// Just log the error
+				ctx.Logger.Error(err, "error reconciling tags")
+			}
+		}
+		err = tags.TagNKSMachine(ctx, vmRef)
+		if err != nil {
+			if err != nil {
+				// Just log the error
+				ctx.Logger.Error(err, "error reconciling tags")
+			}
+		}
+	}()
 }
 
 // NetApp
-func (vms *VMService) deleteTags(ctx *context.MachineContext) error {
-	err := tags.CleanupNKSTags(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+func (vms *VMService) deleteTags(ctx *context.MachineContext) {
+	go func() {
+		err := tags.CleanupNKSTags(ctx)
+		if err != nil {
+			// Just log the error
+			ctx.Logger.Error(err, "error reconciling tags")
+		}
+	}()
 }

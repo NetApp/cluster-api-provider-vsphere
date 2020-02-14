@@ -359,7 +359,9 @@ func (r machineReconciler) reconcileNormal(ctx *context.MachineContext) (reconci
 			return reconcile.Result{}, err
 		}
 		ctx.Logger.Info("waiting on vm networking")
-		return reconcile.Result{}, nil
+		return reconcile.Result{
+			RequeueAfter: 20 * time.Second,
+		}, nil
 	}
 
 	if err := r.reconcileProviderID(ctx, vm, vmService); err != nil {

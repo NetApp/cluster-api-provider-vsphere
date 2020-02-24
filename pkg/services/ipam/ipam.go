@@ -23,13 +23,6 @@ const (
 	ipamConfigNamespaceAnnotationKey = "ipam-config-secret-namespace"
 	ipamConfigKey                    = "config.json"
 
-	WorkspaceIDMetaDataKey       = "hci.nks.netapp.com/workspace"
-	ClusterIDMetaDataKey         = "hci.nks.netapp.com/cluster"
-	ClusterInstanceIDMetaDataKey = "hci.nks.netapp.com/instanceid"
-	VMNameMetaDataKey            = "hci.nks.netapp.com/vmname"
-	IPReservationTypeMetaDataKey = "hci.nks.netapp.com/reservationtype"
-	IPReservationTypeNodeIP      = "nodeip"
-
 	zoneNameAnnotationKey    = "hci.nks.netapp.com/zone"
 	ipamManagedAnnotationKey = "ipam-managed"
 
@@ -37,6 +30,11 @@ const (
 )
 
 type Service struct{}
+
+type stateAnnotation struct {
+	ID string `json:"id"`
+	IP string `json:"ip"`
+}
 
 func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
@@ -75,43 +73,48 @@ func (svc *Service) ReconcileIPAM(ctx *capvcontext.MachineContext) error {
 
 	metaData := getReservationMetaData(ctx)
 
-	for networkType, networkTypeDevices := range networkTypeDeviceMap {
+	for networkType, networkTypeDevice := range networkTypeDeviceMap {
 
-		reservations, err := agent.ReserveIPs(networkType, ipam.IPv4, len(networkTypeDevices), nil, metaData)
+		reservationName, err := getReservationName(ctx, networkType)
 		if err != nil {
-			return errors.Wrapf(err, "could not reserve IPs for network type %q", string(networkType))
+			return errors.Wrap(err, "failed to get reservation name")
 		}
-		ctx.Logger.Info("Reserved IPs", "networkType", string(networkType), "IPs", getReservationIPs(reservations))
 
-		// Update IPAM annotation
+		reservation, err := agent.ReserveIP(networkType, ipam.IPv4, reservationName, "", metaData)
+		if err != nil {
+			return errors.Wrapf(err, "could not reserve IP %s on network type %q", reservationName, string(networkType))
+		}
+		ctx.Logger.Info("Reserved IP", "networkType", string(networkType), "reservation", mapToAnnotation(reservation))
 
-		networkTypeToIPs := make(map[string][]string)
+		// Update IPAM managed annotation
+
+		networkTypeToAnnotations := make(map[string][]stateAnnotation)
 		val, ok := ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey]
 		if ok {
-			if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
-				cleanupReservations(ctx, agent, networkType, reservations)
+			if err := json.Unmarshal([]byte(val), &networkTypeToAnnotations); err != nil {
+				cleanupReservations(ctx, agent, networkType, []ipam.IPAddressReservation{reservation})
 				return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 			}
 		}
-		networkTypeIPs, ok := networkTypeToIPs[string(networkType)]
+		networkTypeAnnotations, ok := networkTypeToAnnotations[string(networkType)]
 		if ok {
-			networkTypeToIPs[string(networkType)] = append(networkTypeIPs, getReservationIPs(reservations)...)
+			networkTypeToAnnotations[string(networkType)] = append(networkTypeAnnotations, mapToAnnotation(reservation))
 		} else {
-			networkTypeToIPs[string(networkType)] = getReservationIPs(reservations)
+			networkTypeToAnnotations[string(networkType)] = []stateAnnotation{mapToAnnotation(reservation)}
 		}
-		marshalled, err := json.Marshal(networkTypeToIPs)
+		marshalled, err := json.Marshal(networkTypeToAnnotations)
 		if err != nil {
-			cleanupReservations(ctx, agent, networkType, reservations)
+			cleanupReservations(ctx, agent, networkType, []ipam.IPAddressReservation{reservation})
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
 		ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = string(marshalled)
 
-		// Assign to devices
+		// Assign to device
 
-		if err := assignReservationsToDevices(reservations, networkTypeDevices); err != nil {
-			cleanupReservations(ctx, agent, networkType, reservations)
+		if err := assignReservationToDevice(reservation, networkTypeDevice); err != nil {
+			cleanupReservations(ctx, agent, networkType, []ipam.IPAddressReservation{reservation})
 			ctx.VSphereMachine.Annotations[ipamManagedAnnotationKey] = val // Revert annotation
-			return errors.Wrap(err, "could not assign IP reservations to devices")
+			return errors.Wrap(err, "could not assign IP reservation to device")
 		}
 		// Assign the modified devices
 		ctx.VSphereMachine.Spec.Network.Devices = devices
@@ -133,12 +136,12 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return nil
 	}
 
-	networkTypeToIPs := make(map[string][]string)
-	if err := json.Unmarshal([]byte(val), &networkTypeToIPs); err != nil {
+	networkTypeToAnnotations := make(map[string][]stateAnnotation)
+	if err := json.Unmarshal([]byte(val), &networkTypeToAnnotations); err != nil {
 		return errors.Wrap(err, "failed to unmarshal ipam state annotation")
 	}
 
-	if len(networkTypeToIPs) == 0 {
+	if len(networkTypeToAnnotations) == 0 {
 		// Nothing to do
 		return nil
 	}
@@ -148,19 +151,20 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 		return errors.Wrap(err, "could not get ipam agent")
 	}
 
-	for netType, ips := range networkTypeToIPs {
+	for netType, annotations := range networkTypeToAnnotations {
 		networkType, err := mapNetworkType(netType)
 		if err != nil {
 			return errors.Wrapf(err, "could not map network type")
 		}
-		if len(ips) > 0 {
-			if err := agent.ReleaseIPs(networkType, ips); err != nil {
-				return errors.Wrapf(err, "could not release IPs: %s", ips)
+		if len(annotations) > 0 {
+			reservationIDs := getIDsFromAnnotations(annotations)
+			if err := agent.ReleaseIPs(networkType, reservationIDs); err != nil {
+				return errors.Wrapf(err, "could not release IPs: %s", reservationIDs)
 			}
-			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IPs", ips)
+			ctx.Logger.Info("Released IPs", "networkType", string(networkType), "IDs", reservationIDs)
 		}
-		delete(networkTypeToIPs, netType)
-		marshalled, err := json.Marshal(networkTypeToIPs)
+		delete(networkTypeToAnnotations, netType)
+		marshalled, err := json.Marshal(networkTypeToAnnotations)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal ipam state annotation")
 		}
@@ -171,10 +175,10 @@ func (svc *Service) ReleaseIPAM(ctx *capvcontext.MachineContext) error {
 }
 
 func cleanupReservations(ctx *capvcontext.MachineContext, agent ipam.Agent, networkType ipam.NetworkType, reservations []ipam.IPAddressReservation) {
-	ips := getReservationIPs(reservations)
-	ctx.Logger.Info("Cleaning up IP reservations", "networkType", string(networkType), "IPs", ips)
-	if err := agent.ReleaseIPs(networkType, ips); err != nil {
-		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IPs", ips)
+	ids := getReservationIDs(reservations)
+	ctx.Logger.Info("Cleaning up IP reservations", "networkType", string(networkType), "IDs", ids)
+	if err := agent.ReleaseIPs(networkType, ids); err != nil {
+		ctx.Logger.Error(err, "failed to clean up reservations, could not release IPs", "IDs", ids)
 	}
 }
 
@@ -213,7 +217,8 @@ func mapNetworkType(networkType string) (ipam.NetworkType, error) {
 	return ipam.Workload, fmt.Errorf("unknown network type %q", networkType)
 }
 
-func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1.NetworkDeviceSpec) (map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec, error) {
+// getNetworkTypeDeviceMap finds the network type for each device
+func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1.NetworkDeviceSpec) (map[ipam.NetworkType]*infrav1.NetworkDeviceSpec, error) {
 
 	// Determine zone
 	zoneName, ok := ctx.VSphereMachine.Annotations[zoneNameAnnotationKey]
@@ -223,39 +228,59 @@ func getNetworkTypeDeviceMap(ctx *capvcontext.MachineContext, devices []*infrav1
 	isManagementZone := zoneName == managementZoneName
 
 	// Determine network types for each device
-	networkTypeDeviceMap := make(map[ipam.NetworkType][]*infrav1.NetworkDeviceSpec)
+	networkTypeDeviceMap := make(map[ipam.NetworkType]*infrav1.NetworkDeviceSpec)
 	for i := range devices {
 		networkType, err := getNetworkType(*ctx.VSphereMachine, isManagementZone, devices[i].NetworkName)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not get network type")
 		}
-		networkTypeDeviceMap[networkType] = append(networkTypeDeviceMap[networkType], devices[i])
+		_, ok := networkTypeDeviceMap[networkType]
+		if ok {
+			// Only one device per network type is allowed
+			return nil, fmt.Errorf("device for network type %s already specified", networkType)
+		}
+		networkTypeDeviceMap[networkType] = devices[i]
 	}
 
 	return networkTypeDeviceMap, nil
 }
 
-func assignReservationsToDevices(reservations []ipam.IPAddressReservation, devices []*infrav1.NetworkDeviceSpec) error {
-	if len(reservations) != len(devices) {
-		return fmt.Errorf("unexpected number of reservations %d, wanted %d", len(reservations), len(devices))
+func assignReservationToDevice(reservation ipam.IPAddressReservation, device *infrav1.NetworkDeviceSpec) error {
+
+	if device == nil {
+		return fmt.Errorf("device is nil")
 	}
-	for i, device := range devices {
-		reservation := reservations[i]
-		prefixLengthSuffix := "/" + strconv.Itoa(reservation.NetworkConfig.PrefixLength)
-		device.IPAddrs = append(device.IPAddrs, reservation.Address+prefixLengthSuffix)
-		device.Nameservers = reservation.NetworkConfig.NameServers
-		device.Gateway4 = reservation.NetworkConfig.DefaultGateway
-		device.SearchDomains = reservation.NetworkConfig.DomainSearch
-	}
+
+	prefixLengthSuffix := "/" + strconv.Itoa(reservation.NetworkConfig.PrefixLength)
+	device.IPAddrs = append(device.IPAddrs, reservation.Address+prefixLengthSuffix)
+	device.Nameservers = reservation.NetworkConfig.NameServers
+	device.Gateway4 = reservation.NetworkConfig.DefaultGateway
+	device.SearchDomains = reservation.NetworkConfig.SearchDomains
+
 	return nil
 }
 
-func getReservationIPs(reservations []ipam.IPAddressReservation) []string {
-	ips := make([]string, 0)
+func getReservationIDs(reservations []ipam.IPAddressReservation) []string {
+	ids := make([]string, 0, len(reservations))
 	for _, res := range reservations {
-		ips = append(ips, res.Address)
+		ids = append(ids, res.ID)
 	}
-	return ips
+	return ids
+}
+
+func getIDsFromAnnotations(annotations []stateAnnotation) []string {
+	ids := make([]string, 0, len(annotations))
+	for _, annotation := range annotations {
+		ids = append(ids, annotation.ID)
+	}
+	return ids
+}
+
+func mapToAnnotation(reservation ipam.IPAddressReservation) stateAnnotation {
+	return stateAnnotation{
+		ID: reservation.ID,
+		IP: reservation.Address,
+	}
 }
 
 func getIPAMAgent(ctx *capvcontext.MachineContext) (ipam.Agent, error) {
@@ -318,10 +343,23 @@ func getReservationMetaData(ctx *capvcontext.MachineContext) map[string]string {
 	clusterID, workspaceID, _, _ := ctx.GetNKSClusterInfo()
 
 	return map[string]string{
-		IPReservationTypeMetaDataKey: IPReservationTypeNodeIP,
-		ClusterIDMetaDataKey:         clusterID,
-		WorkspaceIDMetaDataKey:       workspaceID,
-		ClusterInstanceIDMetaDataKey: ctx.Cluster.Name,
-		VMNameMetaDataKey:            ctx.Machine.Name,
+		ipam.IPReservationTypeKey: ipam.IPReservationTypeNodeIP,
+		ipam.ClusterIDKey:         clusterID,
+		ipam.WorkspaceIDKey:       workspaceID,
+		ipam.ClusterInstanceIDKey: ctx.Cluster.Name,
+		ipam.VMNameKey:            ctx.Machine.Name,
 	}
+}
+
+func getReservationName(ctx *capvcontext.MachineContext, networkType ipam.NetworkType) (string, error) {
+	if ctx.VSphereMachine == nil {
+		return "", fmt.Errorf("VSphereMachine is nil")
+	}
+	// If this is a reservation for the management or workload networks (primary networks)
+	// then the reservation name should be the machine name
+	if networkType == ipam.Management || networkType == ipam.Workload {
+		return ctx.VSphereMachine.Name, nil
+	}
+	// If this is a secondary network (e.g. the data network) then we append the network type to the name
+	return fmt.Sprintf("%s-%s", ctx.VSphereMachine.Name, string(networkType)), nil
 }

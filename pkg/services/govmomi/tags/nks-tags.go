@@ -16,37 +16,89 @@ const (
 	categoryName               = "NKS"
 	clusterInfoTagNameTemplate = "nks.workspaceid.%s.clusterid.%s.clustername.%s"
 	serviceClusterTagName      = "nks.service.cluster"
+
+	tagClusterInfoAnnotationKey    = "nks.netapp.io/tag-cluster-info"
+	tagServiceClusterAnnotationKey = "nks.netapp.io/tag-service-cluster"
 )
+
+func getTagAnnotations() []string {
+	return []string{tagClusterInfoAnnotationKey, tagServiceClusterAnnotationKey}
+}
+
+// MachineTagged returns true if the machine has all expected tags, false otherwise
+func MachineTagged(ctx *context.MachineContext) bool {
+	// Tags that have already been applied to the VM are represented as annotations
+	requiredTagAnnotations := []string{tagClusterInfoAnnotationKey}
+	_, _, _, isServiceCluster := ctx.GetNKSClusterInfo()
+	if isServiceCluster {
+		requiredTagAnnotations = append(requiredTagAnnotations, tagServiceClusterAnnotationKey)
+	}
+	for _, tagAnnotation := range requiredTagAnnotations {
+		if _, ok := ctx.VSphereMachine.Annotations[tagAnnotation]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// MachineHasTags returns true if the machine has some tags, false otherwise
+func MachineHasTags(ctx *context.MachineContext) bool {
+	// Tags that have already been applied to the VM are represented as annotations
+	for _, tagAnnotation := range getTagAnnotations() {
+		if _, ok := ctx.VSphereMachine.Annotations[tagAnnotation]; ok {
+			return true
+		}
+	}
+	return false
+}
 
 // NetApp
 // TagNKSMachine tags the machine with NKS vSphere tags. If the tags do not exist, they are created.
-func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReference) error {
+// Best effort only.
+func TagNKSMachine(ctx *context.MachineContext, vmRef types.ManagedObjectReference) {
 
-	restClient := rest.NewClient(ctx.Session.Client.Client)
-	u, p, err := context.GetVSphereCredentials(ctx.Logger, ctx.Client, ctx.Cluster)
-	if err != nil {
-		return err
-	}
-	err = restClient.Login(ctx.Context, url.UserPassword(u, p))
-	if err != nil {
-		return err
-	}
-	tagManager := tags.NewManager(restClient)
 	clusterID, workspaceID, _, isServiceCluster := ctx.GetNKSClusterInfo()
 
-	ctx.Logger.V(4).Info("tagging VM with cluster information")
-	if err := tagWithClusterInfo(ctx, tagManager, vmRef, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		return errors.Wrapf(err, "could not tag VM with cluster information for machine %q", ctx.Machine.Name)
+	// Build list of tags we should apply so we can pass it into a single goroutine
+	var tagNames []string
+	if _, ok := ctx.VSphereMachine.Annotations[tagClusterInfoAnnotationKey]; !ok {
+		tagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, ctx.Cluster.Name)
+		tagNames = append(tagNames, tagName)
+		ctx.VSphereMachine.Annotations[tagClusterInfoAnnotationKey] = tagName
 	}
-
 	if isServiceCluster {
-		ctx.Logger.V(4).Info("tagging VM as service cluster machine")
-		if err := tagAsServiceCluster(ctx, tagManager, vmRef); err != nil {
-			return errors.Wrapf(err, "could not tag VM as service cluster machine for machine %q", ctx.Machine.Name)
+		if _, ok := ctx.VSphereMachine.Annotations[tagServiceClusterAnnotationKey]; !ok {
+			tagNames = append(tagNames, serviceClusterTagName)
+			ctx.VSphereMachine.Annotations[tagServiceClusterAnnotationKey] = serviceClusterTagName
 		}
 	}
 
-	return nil
+	if len(tagNames) == 0 {
+		return
+	}
+
+	// Apply tags, best effort only
+	go func() {
+
+		restClient := rest.NewClient(ctx.Session.Client.Client)
+		u, p, err := context.GetVSphereCredentials(ctx.Logger, ctx.Client, ctx.Cluster)
+		if err != nil {
+			ctx.Logger.V(4).Info("could not get vSphere credentials", "error", err.Error())
+			return
+		}
+		err = restClient.Login(ctx.Context, url.UserPassword(u, p))
+		if err != nil {
+			ctx.Logger.V(4).Info("could not complete REST client login", "user", u, "error", err.Error())
+			return
+		}
+		tagManager := tags.NewManager(restClient)
+
+		for _, tn := range tagNames {
+			ctx.Logger.V(4).Info("tagging VM", "tag", tn)
+			tagMachine(ctx, tagManager, vmRef, tn)
+		}
+
+	}()
 }
 
 // NetApp
@@ -65,37 +117,36 @@ func CleanupNKSTags(ctx *context.MachineContext) error {
 	tagManager := tags.NewManager(restClient)
 	clusterID, workspaceID, _, isServiceCluster := ctx.GetNKSClusterInfo()
 
-	ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
-	if err := deleteClusterInfoTagAndCategory(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
-		return errors.Wrapf(err, "could not clean up cluster information tag and category for cluster %q", ctx.Cluster.Name)
+	if _, ok := ctx.VSphereMachine.Annotations[tagClusterInfoAnnotationKey]; ok {
+		ctx.Logger.V(4).Info("cleaning up cluster information tag and category", "cluster", ctx.Cluster.Name)
+		if err := deleteClusterInfoTagAndCategory(ctx, tagManager, workspaceID, clusterID, ctx.Cluster.Name); err != nil {
+			return errors.Wrapf(err, "could not clean up cluster information tag and category for cluster %q", ctx.Cluster.Name)
+		}
 	}
 
 	if isServiceCluster {
-		ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
-		if err := deleteServiceClusterTagAndCategory(ctx, tagManager); err != nil {
-			return errors.Wrapf(err, "could not clean up service cluster tag and category for cluster %q", ctx.Cluster.Name)
+		if _, ok := ctx.VSphereMachine.Annotations[tagServiceClusterAnnotationKey]; ok {
+			ctx.Logger.V(4).Info("cleaning up service cluster tag and category", "cluster", ctx.Cluster.Name)
+			if err := deleteServiceClusterTagAndCategory(ctx, tagManager); err != nil {
+				return errors.Wrapf(err, "could not clean up service cluster tag and category for cluster %q", ctx.Cluster.Name)
+			}
 		}
 	}
 
 	return nil
 }
 
-// NetApp
-func tagWithClusterInfo(ctx *context.MachineContext, tm *tags.Manager, moref types.ManagedObjectReference, workspaceID string, clusterID string, clusterName string) error {
-
-	tagName := fmt.Sprintf(clusterInfoTagNameTemplate, workspaceID, clusterID, clusterName)
-
+func tagMachine(ctx *context.MachineContext, tm *tags.Manager, moRef types.ManagedObjectReference, tagName string) {
 	tag, err := getOrCreateNKSTag(ctx, tm, tagName)
 	if err != nil {
-		return err
+		ctx.Logger.V(4).Info("could not get or create tag", "tag", tagName, "error", err.Error())
+		return
 	}
-
-	err = tm.AttachTag(ctx, tag.ID, moref)
+	err = tm.AttachTag(ctx, tag.ID, moRef)
 	if err != nil {
-		return errors.Wrapf(err, "could not attach tag %s to object", tag.Name)
+		ctx.Logger.V(4).Info("could not attach tag to object", "tag", tag.Name, "error", err.Error())
+		return
 	}
-
-	return nil
 }
 
 // NetApp
@@ -111,22 +162,6 @@ func deleteClusterInfoTagAndCategory(ctx *context.MachineContext, tm *tags.Manag
 	}
 
 	return deleteNKSTag(ctx, tm, tag)
-}
-
-// NetApp
-func tagAsServiceCluster(ctx *context.MachineContext, tm *tags.Manager, moref types.ManagedObjectReference) error {
-
-	tag, err := getOrCreateNKSTag(ctx, tm, serviceClusterTagName)
-	if err != nil {
-		return err
-	}
-
-	err = tm.AttachTag(ctx, tag.ID, moref)
-	if err != nil {
-		return errors.Wrapf(err, "could not attach tag %s to object", tag.Name)
-	}
-
-	return nil
 }
 
 // NetApp

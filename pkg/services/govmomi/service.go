@@ -34,11 +34,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/util"
 )
 
-const (
-	// NetApp - Marks a VM as tagged so we don't have to re-tag (It's very slow)
-	taggedAnnotationKey = "nks.netapp.io/tagged"
-)
-
 // VMService provdes API to interact with the VMs using govmomi
 type VMService struct{}
 
@@ -354,31 +349,31 @@ func (vms *VMService) getNetworkStatus(ctx *virtualMachineContext) ([]infrav1.Ne
 
 // NetApp
 func (vms *VMService) reconcileTags(ctx *context.MachineContext) {
-	if _, ok := ctx.VSphereMachine.Annotations[taggedAnnotationKey]; ok {
+
+	// No need to tag if the VM is already tagged
+	if tags.MachineTagged(ctx) {
+		ctx.Logger.V(4).Info("machine already tagged")
 		return
 	}
-	ctx.VSphereMachine.Annotations[taggedAnnotationKey] = "true"
 
-	go func() {
-		vmRef, err := findVM(ctx)
-		if err != nil {
-			if err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error reconciling tags")
-			}
-		}
-		err = tags.TagNKSMachine(ctx, vmRef)
-		if err != nil {
-			if err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error reconciling tags")
-			}
-		}
-	}()
+	vmRef, err := findVM(ctx)
+	if err != nil {
+		ctx.Logger.Error(err, "error reconciling tags")
+		return
+	}
+
+	tags.TagNKSMachine(ctx, vmRef)
 }
 
 // NetApp
 func (vms *VMService) deleteTags(ctx *context.MachineContext) {
+
+	// No need to delete tags if the VM is not tagged
+	if !tags.MachineHasTags(ctx) {
+		ctx.Logger.V(4).Info("machine does not have any tags")
+		return
+	}
+
 	go func() {
 		err := tags.CleanupNKSTags(ctx)
 		if err != nil {

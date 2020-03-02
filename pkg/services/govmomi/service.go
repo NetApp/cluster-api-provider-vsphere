@@ -352,25 +352,17 @@ func (vms *VMService) reconcileTags(ctx *context.MachineContext) {
 
 	// No need to tag if the VM is already tagged
 	if tags.MachineTagged(ctx) {
+		ctx.Logger.V(4).Info("machine already tagged")
 		return
 	}
 
-	go func() {
-		vmRef, err := findVM(ctx)
-		if err != nil {
-			if err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error reconciling tags")
-			}
-		}
-		err = tags.TagNKSMachine(ctx, vmRef)
-		if err != nil {
-			if err != nil {
-				// Just log the error
-				ctx.Logger.Error(err, "error reconciling tags")
-			}
-		}
-	}()
+	vmRef, err := findVM(ctx)
+	if err != nil {
+		ctx.Logger.Error(err, "error reconciling tags")
+		return
+	}
+
+	tags.TagNKSMachine(ctx, vmRef)
 }
 
 // NetApp
@@ -378,6 +370,7 @@ func (vms *VMService) deleteTags(ctx *context.MachineContext) {
 
 	// No need to delete tags if the VM is not tagged
 	if !tags.MachineHasTags(ctx) {
+		ctx.Logger.V(4).Info("machine does not have any tags")
 		return
 	}
 
